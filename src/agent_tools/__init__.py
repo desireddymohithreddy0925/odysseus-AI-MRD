@@ -97,6 +97,7 @@ TOOL_TAGS = {"bash", "python", "web_search", "web_fetch", "read_file", "write_fi
              # the dispatcher — silent failure for the whole cookbook
              # surface.
              "download_model", "serve_model",
+             "launch_model_agent",
              "list_served_models", "stop_served_model",
              "list_downloads", "cancel_download",
              "search_hf_models", "list_cached_models",

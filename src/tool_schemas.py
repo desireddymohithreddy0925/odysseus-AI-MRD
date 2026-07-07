@@ -830,6 +830,31 @@ FUNCTION_TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "launch_model_agent",
+            "description": "Autonomous Cookbook launch assistant. Looks up the model's official HuggingFace metadata/page, infers a likely engine/launch command for the selected server, launches through Cookbook tracking, polls readiness, tails only the new task's logs on failure, applies structured retry suggestions, and stops after a bounded retry limit. Use this when the user wants the agent to handle difficult model launching/debugging instead of manually inspecting tmux. Set dry_run=true to only produce the plan/official page/engine/command without launching.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_id": {"type": "string", "description": "Official HuggingFace repo or local model id to launch (e.g. 'Qwen/Qwen3-8B', 'mlx-community/DeepSeek-V4-Flash-4bit')."},
+                    "model": {"type": "string", "description": "Alias for repo_id."},
+                    "preset": {"type": "string", "description": "Saved Cookbook preset name. If provided without repo_id/cmd, the preset is launched and monitored."},
+                    "cmd": {"type": "string", "description": "Optional explicit first command. If omitted, the tool builds one from HF metadata and engine."},
+                    "engine": {"type": "string", "enum": ["vllm", "sglang", "llama.cpp", "mlx"], "description": "Optional engine override. If omitted, inferred from HF tags/files and host platform."},
+                    "host": {"type": "string", "description": "Friendly Cookbook server name or raw user@host. Omit to use the Cookbook selected default."},
+                    "local": {"type": "boolean", "description": "Force launch on the local machine instead of the Cookbook selected default."},
+                    "port": {"type": "integer", "description": "Port for generated commands, default 8000."},
+                    "dry_run": {"type": "boolean", "description": "Only resolve official metadata and show the launch plan; do not start anything."},
+                    "max_attempts": {"type": "integer", "description": "Maximum launch attempts including retries, default 2, max 4."},
+                    "poll_attempts": {"type": "integer", "description": "Number of status polls per attempt, default 8, max 30."},
+                    "poll_seconds": {"type": "number", "description": "Seconds between polls, default 4, max 20."}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_served_models",
             "description": "List currently running model servers with status, model name, port, throughput, and structured Cookbook diagnoses. If a serve failed, this includes recent logs plus retry suggestions/adjusted commands the agent can use with serve_model.",
             "parameters": {"type": "object", "properties": {}}

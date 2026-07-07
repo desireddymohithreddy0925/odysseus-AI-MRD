@@ -314,6 +314,7 @@ _ADMIN_TOOLS = {
     "manage_settings",
     "download_model",
     "serve_model",
+    "launch_model_agent",
     "serve_preset",
     "stop_served_model",
     "cancel_download",
@@ -619,7 +620,7 @@ async def _execute_tool_block_impl(
         do_tail_serve_output,
         do_list_downloads, do_cancel_download, do_search_hf_models, do_list_cached_models,
         do_list_serve_presets, do_serve_preset, do_adopt_served_model,
-        do_list_cookbook_servers,
+        do_list_cookbook_servers, do_launch_model_agent,
         do_edit_image, do_trigger_research, do_manage_research, do_resolve_contact,
         do_manage_contact,
         do_vault_search, do_vault_get, do_vault_unlock,
@@ -815,6 +816,9 @@ async def _execute_tool_block_impl(
     elif tool == "serve_model":
         desc = "serve_model"
         result = await do_serve_model(content, owner=owner)
+    elif tool == "launch_model_agent":
+        desc = "launch_model_agent"
+        result = await do_launch_model_agent(content, owner=owner)
     elif tool == "list_served_models":
         desc = "list_served_models"
         result = await do_list_served_models(content, owner=owner)

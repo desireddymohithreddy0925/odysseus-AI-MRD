@@ -68,6 +68,7 @@ NON_ADMIN_BLOCKED_TOOLS = BUILTIN_EMAIL_TOOLS | {
     "vault_unlock",
     "download_model",
     "serve_model",
+    "launch_model_agent",
     "serve_preset",
     "stop_served_model",
     "cancel_download",
@@ -150,7 +151,7 @@ _PLAN_MODE_KNOWN_MUTATORS = {
     # entirely on the MCP read-only inventory being present and current.
     "draft_email", "draft_email_reply", "ai_draft_email_reply",
     "download_attachment",
-    "download_model", "serve_model",
+    "download_model", "serve_model", "launch_model_agent",
     "stop_served_model", "cancel_download", "adopt_served_model", "serve_preset",
     "generate_image", "edit_image", "trigger_research", "manage_research",
     # Shell is never read-only-safe; block it explicitly so it stays out of plan
