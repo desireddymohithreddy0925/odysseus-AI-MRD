@@ -1887,6 +1887,44 @@ body.bg-pattern-sparkles {
     .chat-history > * {
       flex: 0 0 auto;
     }
+    .chat-pull-refresh {
+      --pull-refresh-y: 0px;
+      --pull-refresh-progress: 0;
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      z-index: 48;
+      width: 34px;
+      height: 34px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      box-shadow: 0 8px 20px color-mix(in srgb, #000 16%, transparent);
+      opacity: calc(0.25 + (var(--pull-refresh-progress) * 0.75));
+      pointer-events: none;
+      transform: translate(-50%, calc(-42px + var(--pull-refresh-y))) scale(calc(0.82 + (var(--pull-refresh-progress) * 0.18)));
+      transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.16s ease;
+    }
+    .chat-pull-refresh.is-visible,
+    .chat-pull-refresh.is-refreshing {
+      display: inline-flex;
+    }
+    .chat-pull-refresh.is-ready,
+    .chat-pull-refresh.is-refreshing {
+      border-color: color-mix(in srgb, var(--accent, var(--red)) 58%, transparent);
+      color: var(--accent, var(--red));
+    }
+    .chat-pull-refresh .spinner-whirlpool {
+      margin: 0 !important;
+      width: 18px !important;
+      height: 18px !important;
+    }
+    .chat-pull-refresh canvas {
+      display: block;
+    }
     /* Sortable Cookbook column headers had no visual cue, so users couldn't tell
        a header was clickable (the Newest sort on the Model column was invisible).
        Show a pointer + hover highlight, and underline the active sort column. */

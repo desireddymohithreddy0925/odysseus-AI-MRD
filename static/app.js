@@ -2393,15 +2393,18 @@ function initializeEventListeners() {
 	      }, 5000);
 	    }
 
-	    function checkPickerOverflow() {
-	      // Skip responsive collapse on mobile — keyboard open/close causes flicker
-	      if (_isMobile) {
-	        setComposerPlaceholder(inputTop.clientWidth || window.innerWidth || 0);
-	        return;
-	      }
-	      const w = inputTop.clientWidth;
-	      // Hide model picker
-	      pickerWrap.classList.toggle('picker-auto-hidden', w < PICKER_HIDE_WIDTH);
+		    function checkPickerOverflow() {
+		      const w = inputTop.clientWidth || window.innerWidth || 0;
+		      const hasText = !!(textarea && textarea.value && textarea.value.trim());
+		      if (_isMobile) {
+		        // Mobile has much less horizontal room: any typed text should get
+		        // the full composer row, matching plan-mode's collision behavior.
+		        pickerWrap.classList.toggle('picker-auto-hidden', hasText);
+		        setComposerPlaceholder(w);
+		        return;
+		      }
+		      // Hide model picker
+		      pickerWrap.classList.toggle('picker-auto-hidden', w < PICKER_HIDE_WIDTH);
 	      // Keep a prompt inside the composer even when the picker crowds the row.
 	      // A blank placeholder makes the mobile/compact empty state feel broken.
 	      setComposerPlaceholder(w);
@@ -4174,12 +4177,13 @@ function startOdysseusApp() {
   // Toggle mic/send icon on input change + hide model picker after enough text
   if (messageInput) {
     const _debouncedUpdateIcon = uiModule.debounce(_updateSendBtnIcon, 50);
-	    const _MODEL_PICKER_HIDE_CHARS = 28;
-	    const _syncModelPickerAutohide = () => {
-	      const hidePicker = (messageInput.value || '').replace(/\s/g, '').length >= _MODEL_PICKER_HIDE_CHARS;
-	      if (modelPickerWrap) {
-	        modelPickerWrap.classList.toggle('model-picker-autohide', hidePicker);
-	      }
+		    const _MODEL_PICKER_HIDE_CHARS = 28;
+		    const _syncModelPickerAutohide = () => {
+		      const compactMobile = _isMobileChatInput() && !!(messageInput.value || '').trim();
+		      const hidePicker = compactMobile || (messageInput.value || '').replace(/\s/g, '').length >= _MODEL_PICKER_HIDE_CHARS;
+		      if (modelPickerWrap) {
+		        modelPickerWrap.classList.toggle('model-picker-autohide', hidePicker);
+		      }
 	      const planStatus = el('plan-mode-status');
 	      if (planStatus) {
 	        planStatus.classList.toggle('plan-mode-status-autohide', hidePicker);
@@ -4417,14 +4421,102 @@ function startOdysseusApp() {
   }, 3500);
   runNonCriticalStartup(() => modelsModule.refreshProviders(), 6500);
   runNonCriticalStartup(() => ragModule.loadPersonalDocs(), 9000);
-  runNonCriticalStartup(() => memoryModule.loadMemories(), 12000);
-  
-  // Ensure proper initial state
-  voiceRecorderModule.init();
-  if (censorModule) censorModule.init();
+	  runNonCriticalStartup(() => memoryModule.loadMemories(), 12000);
 
-  // Auto-focus message input on load
-  const msgEl = document.getElementById('message');
+	  // Ensure proper initial state
+	  voiceRecorderModule.init();
+	  if (censorModule) censorModule.init();
+
+	  // ── Mobile pull-to-refresh for the active chat ──
+	  (function initMobileChatPullRefresh() {
+	    const historyEl = document.getElementById('chat-history');
+	    const container = document.getElementById('chat-container');
+	    if (!historyEl || !container || !('ontouchstart' in window || navigator.maxTouchPoints > 0)) return;
+
+	    const THRESHOLD = 72;
+	    const MAX_PULL = 104;
+	    let startY = 0;
+	    let pullY = 0;
+	    let tracking = false;
+	    let refreshing = false;
+	    let spinner = null;
+	    const indicator = document.createElement('div');
+	    indicator.className = 'chat-pull-refresh';
+	    indicator.setAttribute('aria-hidden', 'true');
+	    indicator.innerHTML = '<div class="chat-pull-refresh-spinner"></div>';
+	    container.prepend(indicator);
+	    const spinnerMount = indicator.querySelector('.chat-pull-refresh-spinner');
+	    try {
+	      spinner = spinnerModule.createWhirlpool(18);
+	      spinnerMount.replaceChildren(spinner.element);
+	    } catch (_) {}
+
+	    function setPull(px, active = false) {
+	      pullY = Math.max(0, Math.min(MAX_PULL, px));
+	      const pct = Math.min(1, pullY / THRESHOLD);
+	      indicator.style.setProperty('--pull-refresh-y', `${pullY}px`);
+	      indicator.style.setProperty('--pull-refresh-progress', `${pct}`);
+	      indicator.classList.toggle('is-visible', active || refreshing || pullY > 2);
+	      indicator.classList.toggle('is-ready', pct >= 1 && !refreshing);
+	      indicator.classList.toggle('is-refreshing', refreshing);
+	    }
+
+	    async function runRefresh() {
+	      if (refreshing || _isForegroundChatBusy()) return;
+	      refreshing = true;
+	      setPull(THRESHOLD, true);
+	      try {
+	        const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
+	        if (sid && sessionModule.selectSession) {
+	          await sessionModule.selectSession(sid, { keepSidebar: true, showLoading: false, immediateLoading: true });
+	        } else if (sessionModule && sessionModule.loadSessions) {
+	          await sessionModule.loadSessions();
+	        }
+	      } catch (err) {
+	        console.warn('pull refresh failed:', err);
+	      } finally {
+	        refreshing = false;
+	        setPull(0, false);
+	      }
+	    }
+
+	    historyEl.addEventListener('touchstart', (e) => {
+	      if (refreshing || window.innerWidth > 768) return;
+	      if (historyEl.scrollTop > 0) return;
+	      if (e.target && e.target.closest && e.target.closest('.chat-input-bar, textarea, input, button, select, a')) return;
+	      tracking = true;
+	      startY = e.touches[0].clientY;
+	      setPull(0, false);
+	    }, { passive: true });
+
+	    historyEl.addEventListener('touchmove', (e) => {
+	      if (!tracking || refreshing) return;
+	      const dy = e.touches[0].clientY - startY;
+	      if (dy <= 0) {
+	        setPull(0, false);
+	        return;
+	      }
+	      if (historyEl.scrollTop <= 0) {
+	        e.preventDefault();
+	        setPull(dy * 0.62, true);
+	      }
+	    }, { passive: false });
+
+	    historyEl.addEventListener('touchend', () => {
+	      if (!tracking) return;
+	      tracking = false;
+	      if (pullY >= THRESHOLD) runRefresh();
+	      else setPull(0, false);
+	    }, { passive: true });
+
+	    historyEl.addEventListener('touchcancel', () => {
+	      tracking = false;
+	      if (!refreshing) setPull(0, false);
+	    }, { passive: true });
+	  })();
+
+	  // Auto-focus message input on load
+	  const msgEl = document.getElementById('message');
   if (msgEl) msgEl.focus();
   
   // Initialize mouse-based drag for sidebar sections
