@@ -4177,7 +4177,7 @@ function startOdysseusApp() {
   // Toggle mic/send icon on input change + hide model picker after enough text
   if (messageInput) {
     const _debouncedUpdateIcon = uiModule.debounce(_updateSendBtnIcon, 50);
-		    const _MODEL_PICKER_HIDE_CHARS = 28;
+		    const _MODEL_PICKER_HIDE_CHARS = 23;
 		    const _syncModelPickerAutohide = () => {
 		      const compactMobile = _isMobileChatInput() && !!(messageInput.value || '').trim();
 		      const hidePicker = compactMobile || (messageInput.value || '').replace(/\s/g, '').length >= _MODEL_PICKER_HIDE_CHARS;

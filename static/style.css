@@ -2504,7 +2504,8 @@ body.bg-pattern-sparkles {
 	      pointer-events: none;
 	      transform: translateY(-4px) scale(0.96);
 	    }
-    .chat-input-top > .model-picker-wrap.model-picker-autohide {
+    .chat-input-top > .model-picker-wrap.model-picker-autohide,
+    .chat-input-top > .model-picker-wrap.picker-auto-hidden {
       opacity: 0;
       pointer-events: none;
       transform: translateY(-4px) scale(0.96);
