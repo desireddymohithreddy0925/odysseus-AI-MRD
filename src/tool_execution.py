@@ -314,7 +314,6 @@ _ADMIN_TOOLS = {
     "manage_settings",
     "download_model",
     "serve_model",
-    "launch_model_agent",
     "serve_preset",
     "stop_served_model",
     "cancel_download",
@@ -620,7 +619,7 @@ async def _execute_tool_block_impl(
         do_tail_serve_output,
         do_list_downloads, do_cancel_download, do_search_hf_models, do_list_cached_models,
         do_list_serve_presets, do_serve_preset, do_adopt_served_model,
-        do_list_cookbook_servers, do_launch_model_agent,
+        do_list_cookbook_servers,
         do_edit_image, do_trigger_research, do_manage_research, do_resolve_contact,
         do_manage_contact,
         do_vault_search, do_vault_get, do_vault_unlock,
@@ -753,6 +752,11 @@ async def _execute_tool_block_impl(
         desc = f"{tool}: {first_line}"
         result = await _direct_fallback(tool, content, progress_cb=progress_cb) \
             or {"error": f"{tool}: execution failed", "exit_code": 1}
+    elif tool in ("apply_patch", "todowrite"):
+        first_line = content.split(chr(10))[0][:80]
+        desc = f"{tool}: {first_line}" if first_line else tool
+        result = await _direct_fallback(tool, content, session_id=session_id, owner=owner) \
+            or {"error": f"{tool}: execution failed", "exit_code": 1}
     elif tool == "manage_bg_jobs":
         # Inspect/kill detached `bash` jobs; needs session_id to scope to chat.
         desc = f"manage_bg_jobs: {content.split(chr(10))[0][:80]}"
@@ -816,9 +820,6 @@ async def _execute_tool_block_impl(
     elif tool == "serve_model":
         desc = "serve_model"
         result = await do_serve_model(content, owner=owner)
-    elif tool == "launch_model_agent":
-        desc = "launch_model_agent"
-        result = await do_launch_model_agent(content, owner=owner)
     elif tool == "list_served_models":
         desc = "list_served_models"
         result = await do_list_served_models(content, owner=owner)

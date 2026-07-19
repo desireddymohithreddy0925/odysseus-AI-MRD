@@ -96,6 +96,14 @@ def test_disabled_tools_respects_missing_vs_explicit_toggles():
     )
 
 
+def test_workspace_auto_escalation_keeps_shell_tools():
+    """Workspace/shell auto-routing must not use the light typed-tool clamp."""
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert '_workspace_agent_intent = _tool_intent.category in {"shell", "workspace"}' in source
+    assert "allow_bash = \"true\"" in source
+    assert "if auto_escalated and not _workspace_agent_intent:" in source
+
+
 # ── Functional tests of the disabled-tools logic ───────────────
 
 

@@ -648,6 +648,7 @@ async def test_public_agent_policy_blocks_sensitive_tools(monkeypatch):
     # here instead of silently shrinking the blocklist.
     bare_email_tools = (
         "list_email_accounts", "list_emails", "read_email", "search_emails",
+        "scan_email_unsubscribes", "unsubscribe_email",
         "send_email", "reply_to_email", "draft_email", "draft_email_reply",
         "ai_draft_email_reply", "archive_email", "delete_email",
         "mark_email_read", "bulk_email", "download_attachment",
@@ -758,6 +759,7 @@ async def test_disable_tool_email_covers_full_builtin_set(monkeypatch):
     # from the constant fails here instead of silently shrinking the toggle.
     bare_email_tools = (
         "list_email_accounts", "list_emails", "read_email", "search_emails",
+        "scan_email_unsubscribes", "unsubscribe_email",
         "send_email", "reply_to_email", "draft_email", "draft_email_reply",
         "ai_draft_email_reply", "archive_email", "delete_email",
         "mark_email_read", "bulk_email", "download_attachment",
@@ -930,7 +932,7 @@ async def test_plan_mode_blocks_mutating_email_aliases_without_mcp_inventory(mon
     denied = plan_mode_disabled_tools()
 
     for tool_name in ("draft_email", "draft_email_reply", "ai_draft_email_reply",
-                      "download_attachment", "send_email", "delete_email"):
+                      "download_attachment", "send_email", "delete_email", "unsubscribe_email"):
         desc, result = await execute_tool_block(
             SimpleNamespace(tool_type=tool_name, content="{}"),
             owner="admin-user",
@@ -947,6 +949,17 @@ async def test_plan_mode_blocks_mutating_email_aliases_without_mcp_inventory(mon
     assert result["exit_code"] == 0
     assert mcp.calls == [
         ("mcp__email__search_emails", {"query": "x", "_odysseus_owner": "admin-user"}),
+    ]
+
+    mcp.calls.clear()
+    desc, result = await execute_tool_block(
+        SimpleNamespace(tool_type="scan_email_unsubscribes", content='{"limit": 1}'),
+        owner="admin-user",
+        disabled_tools=denied,
+    )
+    assert result["exit_code"] == 0
+    assert mcp.calls == [
+        ("mcp__email__scan_email_unsubscribes", {"limit": 1, "_odysseus_owner": "admin-user"}),
     ]
 
 

@@ -430,12 +430,13 @@ def build_uploaded_file_manifest(att_ids: list, upload_handler, owner: Optional[
 
 def add_user_message(sess, chat_handler, preprocessed: PreprocessedMessage, incognito: bool = False):
     """Add user message to session history and update session name.
-    In incognito mode, still add to in-memory history (for conversation context)
-    but skip session name update (which would persist)."""
+    Incognito messages must not mutate persistent session history, even in
+    memory, because a later normal turn can persist the same session object."""
+    if incognito:
+        return
     user_meta = {"attachments": preprocessed.attachment_meta} if preprocessed.attachment_meta else None
     sess.add_message(ChatMessage("user", preprocessed.user_content, metadata=user_meta))
-    if not incognito:
-        chat_handler.update_session_name_if_needed(sess, preprocessed.text_for_context)
+    chat_handler.update_session_name_if_needed(sess, preprocessed.text_for_context)
 
 
 def fire_message_event(request, webhook_manager, session_id: str, sess, message: str, compare_mode: bool = False):
@@ -1023,7 +1024,15 @@ def save_assistant_response(
     tool_events: list = None,
     incognito: bool = False,
 ):
-    """Add assistant response to session history. In incognito mode, keeps in-memory context but skips DB persistence."""
+    """Add assistant response to session history.
+
+    Incognito responses are intentionally not added to the session object. The
+    session may later be saved by a normal turn, so "in-memory only" is not
+    private enough.
+    """
+    if incognito:
+        return None
+
     md = dict(last_metrics) if last_metrics else {}
     def _model_value(value) -> str:
         if value is None:
@@ -1065,17 +1074,13 @@ def save_assistant_response(
         _content = full_response
     sess.add_message(ChatMessage("assistant", _content, metadata=md))
 
-    if not incognito:
-        from core.database import update_session_last_accessed
-        update_session_last_accessed(session_id)
-        session_manager.save_sessions()
+    from core.database import update_session_last_accessed
+    update_session_last_accessed(session_id)
+    session_manager.save_sessions()
 
     # Return the persisted message's DB id so the stream can wire it onto the
     # freshly-rendered bubble — lets the user edit/delete a just-streamed reply
-    # without reloading. Incognito returns None: those messages are ephemeral,
-    # so we don't hand out an edit/delete handle for them.
-    if incognito:
-        return None
+    # without reloading.
     try:
         _last = sess.history[-1]
         _meta = getattr(_last, "metadata", None)

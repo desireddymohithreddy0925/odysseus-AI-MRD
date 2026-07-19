@@ -47,7 +47,7 @@ from src.tools.cookbook import (  # noqa: F401
     do_stop_served_model, do_tail_serve_output, do_list_downloads,
     do_cancel_download, do_search_hf_models, do_adopt_served_model,
     do_list_cookbook_servers, do_list_serve_presets, do_serve_preset,
-    do_list_cached_models, do_launch_model_agent,
+    do_list_cached_models,
     _cookbook_servers, _resolve_cookbook_host, _cookbook_env_for_host,
     _infer_serve_port, _infer_serve_host, _ensure_served_endpoint,
     _cookbook_register_task, _cookbook_apply_retry_suggestion,

@@ -33,6 +33,57 @@ def _validate_cookbook_ssh_target(remote_host: Any, ssh_port: Any = "") -> tuple
     return remote, sport
 
 
+def _cookbook_label_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _cookbook_is_exact_repo_id(value: Any) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", str(value or "").strip()))
+
+
+def _cookbook_match_saved_preset(query: str, presets: List[Any], host: str = "") -> Optional[Dict[str, Any]]:
+    """Resolve a user-facing model label to a saved serve preset.
+
+    The launch agent should be callable directly. If the model says
+    `repo_id="Qwen3.6-27B-AEON"` because the user used the short UI label, do
+    not force it through `list_serve_presets`; match the saved preset inside
+    the autopilot and let `do_serve_preset` reuse the known-good command.
+    """
+    q = _cookbook_label_key(query)
+    if not q:
+        return None
+    host = str(host or "")
+    exact_repo = _cookbook_is_exact_repo_id(query)
+    candidates: List[tuple[int, Dict[str, Any]]] = []
+    for p in presets or []:
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get("name") or "")
+        model = str(p.get("model") or p.get("modelId") or "")
+        phost = str(p.get("host") or p.get("remoteHost") or "")
+        haystacks = [_cookbook_label_key(name), _cookbook_label_key(model)]
+        if exact_repo:
+            # If the user gave a real HF repo, only reuse a preset that names
+            # that exact repo/label. A substring match here is dangerous:
+            # cyankiwi/Qwen3.5-122B-A10B-AWQ-8bit must not launch the saved
+            # generic Qwen/Qwen3.5-122B-A10B preset.
+            if not any(h and q == h for h in haystacks):
+                continue
+        else:
+            if not any(h and (q == h or q in h or h in q) for h in haystacks):
+                continue
+        score = 10
+        if host and phost == host:
+            score += 20
+        if q in haystacks:
+            score += 10
+        candidates.append((score, p))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
 async def _cookbook_servers() -> Dict[str, Any]:
     """Return the cookbook's configured servers + the currently-selected
     default host. Shape: {default_host, hosts: [{host, platform, env, envPath}]}.
@@ -200,7 +251,7 @@ async def _ensure_served_endpoint(
     port = _infer_serve_port(cmd)
     base_url = f"http://{endpoint_host}:{port}/v1"
     short_name = model.split("/")[-1] if "/" in model else model
-    is_image = "diffusion_server.py" in (cmd or "")
+    is_image = "diffusion_server.py" in (cmd or "") or "mlx_image_server.py" in (cmd or "")
     payload = {
         "name": short_name if not is_image else f"{short_name} (image)",
         "base_url": base_url,
@@ -315,6 +366,7 @@ async def _cookbook_register_task(
 _MODEL_PROCESS_PATTERNS = [
     ("vLLM",            ["vllm.entrypoints", "vllm serve", "/vllm/", "vllm-openai"]),
     ("SGLang",          ["sglang.launch_server", "sglang/launch_server"]),
+    ("MLX Image",       ["mlx_image_server.py", "mflux-generate-qwen", "mflux-generate"]),
     ("MLX",             ["mlx_lm.server", "mlx-lm"]),
     ("llama.cpp",       ["llama-server", "llama_cpp_server", "llamacppserver"]),
     ("Ollama",          ["ollama serve", "ollama runner", "/ollama "]),
@@ -372,6 +424,17 @@ def _cookbook_engine_from_model_info(repo_id: str, info: Optional[Dict[str, Any]
     tags = {str(t).lower() for t in (info.get("tags") or []) if t is not None}
     siblings = [str(s).lower() for s in (info.get("siblings") or []) if s is not None]
     files = " ".join(siblings)
+    is_image = (
+        "diffusers" in tags
+        or "text-to-image" in tags
+        or "image-to-image" in tags
+        or any(k in rid for k in ("qwen-image", "z-image", "flux", "stable-diffusion", "sdxl", "hidream", "boogu", "krea-2"))
+    )
+    is_mlx_image = is_image and ("mlx" in tags or "mlx" in rid or "mlx-community/" in rid)
+    if is_mlx_image:
+        return "mlx_image"
+    if is_image:
+        return "diffusers"
     if "mlx" in tags or "mlx" in rid or "mlx-community/" in rid or platform in {"macos", "darwin"}:
         return "mlx"
     if "gguf" in tags or "gguf" in rid or ".gguf" in files:
@@ -389,6 +452,10 @@ def _cookbook_default_launch_cmd(repo_id: str, engine: str, *, port: int = 8000,
     port = int(port or 8000)
     if engine in {"mlx", "mlx-lm", "mlx_lm"}:
         return f"python3 -m mlx_lm.server --model {repo_id} --host 0.0.0.0 --port {port}"
+    if engine in {"mlx_image", "mlx-image", "mflux"}:
+        return f"python3 scripts/mlx_image_server.py --model {repo_id} --host 0.0.0.0 --port {port}"
+    if engine in {"diffusers", "diffusion", "image"}:
+        return f"python3 scripts/diffusion_server.py --model {repo_id} --host 0.0.0.0 --port {port}"
     if engine in {"sglang", "sgl"}:
         return f"python3 -m sglang.launch_server --model-path {repo_id} --host 0.0.0.0 --port {port}"
     if engine in {"llama.cpp", "llamacpp", "llama"}:
@@ -1457,194 +1524,6 @@ async def do_serve_preset(content: str, owner: Optional[str] = None) -> Dict:
         return {"error": data.get("error", "Serve failed"), "exit_code": 1}
     except Exception as e:
         return {"error": str(e), "exit_code": 1}
-
-
-async def do_launch_model_agent(content: str, owner: Optional[str] = None) -> Dict:
-    """Plan, launch, monitor, diagnose, and bounded-retry a Cookbook serve.
-
-    This is the agent-facing autopilot for difficult model launches. It keeps
-    every mutation inside the existing Cookbook route/tool path so tasks remain
-    visible in the UI and stoppable by `stop_served_model`.
-    """
-    try:
-        args = _parse_tool_args(content) if content.strip() else {}
-    except ValueError:
-        return {"error": "Invalid JSON arguments", "exit_code": 1}
-
-    repo_id = (args.get("repo_id") or args.get("model") or "").strip()
-    preset = (args.get("preset") or args.get("name") or "").strip()
-    explicit_cmd = (args.get("cmd") or "").strip()
-    dry_run = bool(args.get("dry_run") or args.get("plan_only"))
-    try:
-        max_attempts = int(args.get("max_attempts") or 2)
-    except (TypeError, ValueError):
-        max_attempts = 2
-    max_attempts = max(1, min(max_attempts, 4))
-    try:
-        poll_attempts = int(args.get("poll_attempts") or 8)
-    except (TypeError, ValueError):
-        poll_attempts = 8
-    poll_attempts = max(1, min(poll_attempts, 30))
-    try:
-        poll_seconds = float(args.get("poll_seconds") or 4)
-    except (TypeError, ValueError):
-        poll_seconds = 4.0
-    poll_seconds = max(0.5, min(poll_seconds, 20.0))
-    try:
-        port = int(args.get("port") or 8000)
-    except (TypeError, ValueError):
-        port = 8000
-
-    host = (args.get("host") or "").strip()
-    if host:
-        host = await _resolve_cookbook_host(host)
-    if not host and not args.get("local"):
-        servers = await _cookbook_servers()
-        host = servers.get("default_host") or ""
-    else:
-        servers = await _cookbook_servers()
-    host_meta = _cookbook_host_meta(host, servers)
-
-    info: Dict[str, Any] = {}
-    if repo_id:
-        info = await _cookbook_hf_model_info(repo_id)
-    elif not preset:
-        return {"error": "repo_id/model or preset is required", "exit_code": 1}
-
-    engine = (args.get("engine") or "").strip().lower()
-    if not engine and repo_id:
-        engine = _cookbook_engine_from_model_info(repo_id, info, host_meta)
-    if not explicit_cmd and repo_id:
-        explicit_cmd = _cookbook_default_launch_cmd(repo_id, engine, port=port, info=info)
-
-    plan_lines = ["Model launch plan:"]
-    if repo_id:
-        plan_lines.append(f"- official page: {info.get('url') or f'https://huggingface.co/{repo_id}'}")
-        if info.get("error"):
-            plan_lines.append(f"- metadata lookup: {info['error']} (launch can still use cached/private models)")
-        plan_lines.append(f"- selected engine: {engine or 'preset'}")
-        plan_lines.append(f"- first command: {explicit_cmd}")
-    if preset:
-        plan_lines.append(f"- preset: {preset}")
-    plan_lines.append(f"- target host: {host or 'local'}")
-    if host_meta:
-        env_bit = f"{host_meta.get('env') or 'none'}:{host_meta.get('envPath') or ''}"
-        plan_lines.append(f"- host platform/env: {host_meta.get('platform') or 'unknown'} / {env_bit}")
-    plan_lines.append("- launch/debug policy: Cookbook tracked launch only; poll status; tail only the new session; apply structured retry suggestions; stop after retry limit.")
-
-    if dry_run:
-        return {
-            "output": "\n".join(plan_lines),
-            "plan": {
-                "repo_id": repo_id,
-                "preset": preset,
-                "engine": engine,
-                "cmd": explicit_cmd,
-                "host": host,
-                "official_url": info.get("url") or (f"https://huggingface.co/{repo_id}" if repo_id else ""),
-                "hf_info": info,
-            },
-            "exit_code": 0,
-        }
-
-    attempts: List[Dict[str, Any]] = []
-    cmd = explicit_cmd
-    last_error = ""
-    for attempt_no in range(1, max_attempts + 1):
-        launch_args: Dict[str, Any]
-        if preset and attempt_no == 1 and not repo_id and not cmd:
-            launch_result = await do_serve_preset(json.dumps({"name": preset}), owner=owner)
-            launch_args = {"preset": preset}
-        else:
-            if not repo_id or not cmd:
-                return {"error": "repo_id and cmd are required when not launching by preset", "exit_code": 1, "plan": "\n".join(plan_lines)}
-            launch_args = {"repo_id": repo_id, "cmd": cmd}
-            if host:
-                launch_args["host"] = host
-            if args.get("local"):
-                launch_args["local"] = True
-            launch_result = await do_serve_model(json.dumps(launch_args), owner=owner)
-
-        sid = launch_result.get("session_id") if isinstance(launch_result, dict) else None
-        attempt: Dict[str, Any] = {
-            "attempt": attempt_no,
-            "launch_args": launch_args,
-            "launch_result": launch_result,
-            "session_id": sid,
-        }
-        attempts.append(attempt)
-        if not isinstance(launch_result, dict) or launch_result.get("exit_code") not in (0, None):
-            last_error = (launch_result or {}).get("error") or "launch failed"
-            attempt["phase"] = "launch_failed"
-            break
-        if not sid:
-            last_error = "launch did not return a session_id"
-            attempt["phase"] = "launch_missing_session"
-            break
-
-        task = None
-        list_result: Dict[str, Any] = {}
-        for poll_idx in range(poll_attempts):
-            list_result = await do_list_served_models("{}", owner=owner)
-            task = _cookbook_find_task(list_result.get("tasks") or [], sid)
-            phase = _cookbook_phase(task)
-            attempt["last_phase"] = phase
-            if phase == "ready":
-                return {
-                    "output": "\n".join(plan_lines + [
-                        "",
-                        f"Launch succeeded on attempt {attempt_no}.",
-                        f"- session: {sid}",
-                        f"- phase: {phase}",
-                    ]),
-                    "session_id": sid,
-                    "phase": phase,
-                    "attempts": attempts,
-                    "exit_code": 0,
-                }
-            if phase in {"error", "crashed", "failed", "stopped", "killed", "cancelled", "canceled"}:
-                break
-            if poll_idx < poll_attempts - 1:
-                await asyncio.sleep(poll_seconds)
-
-        tail_result = await do_tail_serve_output(json.dumps({"session_id": sid, "tail": 800}), owner=owner)
-        tail_text = (tail_result.get("output") or tail_result.get("error") or "") if isinstance(tail_result, dict) else ""
-        attempt["tail"] = tail_text[-4000:]
-        diagnosis = None
-        if task and isinstance(task.get("diagnosis"), dict):
-            diagnosis = task.get("diagnosis")
-        if not diagnosis and tail_text:
-            try:
-                from routes.cookbook_helpers import _diagnose_serve_output
-                diagnosis = _diagnose_serve_output(tail_text)
-            except Exception:
-                diagnosis = None
-        attempt["diagnosis"] = diagnosis
-        last_error = (diagnosis or {}).get("message") or f"serve did not become ready (phase={_cookbook_phase(task)})"
-
-        retry_cmd = ""
-        if diagnosis and cmd:
-            for suggestion in diagnosis.get("suggestions") or []:
-                candidate = _cookbook_apply_retry_suggestion(cmd, suggestion)
-                if candidate and candidate != cmd:
-                    retry_cmd = candidate
-                    attempt["retry_suggestion"] = suggestion
-                    break
-        if not retry_cmd or attempt_no >= max_attempts:
-            break
-        cmd = retry_cmd
-        attempt["next_cmd"] = cmd
-
-    return {
-        "output": "\n".join(plan_lines + [
-            "",
-            f"Launch did not reach ready after {len(attempts)} attempt(s).",
-            f"Last diagnosis: {last_error or 'unknown'}",
-            "Check the attempts field for session IDs, command(s), and captured tail output.",
-        ]),
-        "attempts": attempts,
-        "exit_code": 1,
-    }
 
 
 async def do_list_cached_models(content: str, owner: Optional[str] = None) -> Dict:

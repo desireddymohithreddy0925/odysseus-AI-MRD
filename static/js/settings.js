@@ -22,7 +22,7 @@ function safeRasterDataUrl(raw) {
 }
 
 /* ── Tab switching ── */
-const ADMIN_TABS = new Set(['services', 'integrations', 'tools', 'users', 'system']);
+const ADMIN_TABS = new Set(['services', 'added-models', 'integrations', 'tools', 'users', 'system']);
 
 function initTabs() {
   modalEl.querySelectorAll('[data-settings-tab]').forEach(btn => {
@@ -792,8 +792,9 @@ async function initImageSettings() {
 
   async function saveSettings() {
     try {
-      await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_gen_enabled: enabledToggle ? enabledToggle.checked : false, image_model: modelSel.value, image_quality: qualSel.value }) });
+      if (!res.ok) throw new Error(await res.text().catch(() => `HTTP ${res.status}`));
       msg.textContent = 'Saved'; msg.style.color = 'var(--fg)'; setTimeout(() => { msg.textContent = ''; }, 2000);
     } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
   }
@@ -2816,6 +2817,17 @@ async function initReminderSettings() {
 async function initEmailAccountsSettings() {
   const root = el('settings-modal');
   if (!root || !root.querySelector('[data-settings-panel="email"]')) return;
+
+  el('set-email-open-library-settings')?.addEventListener('click', async () => {
+    try {
+      const mod = await import('./emailLibrary.js?v=20260715emailreplyfix19');
+      if (typeof mod.openEmailLibrarySettings === 'function') {
+        await mod.openEmailLibrarySettings();
+      }
+    } catch (e) {
+      console.warn('Failed to open Email settings page', e);
+    }
+  });
   const manageBtn = el('set-email-open-integrations');
   if (manageBtn && manageBtn.dataset.bound !== '1') {
     manageBtn.dataset.bound = '1';
@@ -3106,24 +3118,31 @@ async function initEmailSettings() {
   const root = el('settings-modal');
   if (!root || !root.querySelector('[data-settings-panel="email"]')) return;
 
-  const styleKey = 'odysseus-email-writing-style';
+  const styleKey = () => {
+    const account = String(window.__odysseusActiveEmailAccount || '').trim();
+    return account ? `odysseus-email-writing-style:${account}` : 'odysseus-email-writing-style';
+  };
   const styleEl = el('set-email-style');
+  const emailAccountSuffix = () => {
+    const account = String(window.__odysseusActiveEmailAccount || '').trim();
+    return account ? `?account_id=${encodeURIComponent(account)}` : '';
+  };
 
   // The account/CardDAV config endpoints can be slow when remote mail servers
   // are cold. Populate the Writing Style box independently so saved prose does
   // not appear seconds after the panel opens.
   try {
-    const cachedStyle = localStorage.getItem(styleKey);
+    const cachedStyle = localStorage.getItem(styleKey());
     if (styleEl && cachedStyle !== null && !styleEl.value) styleEl.value = cachedStyle;
   } catch (_) {}
 
   const loadWritingStyle = async () => {
     try {
-      const res = await fetch('/api/email/style');
+      const res = await fetch(`/api/email/style${emailAccountSuffix()}`);
       const data = await res.json();
       const style = data.style || '';
       if (styleEl) styleEl.value = style;
-      try { localStorage.setItem(styleKey, style); } catch (_) {}
+      try { localStorage.setItem(styleKey(), style); } catch (_) {}
     } catch (_) {}
   };
   loadWritingStyle();
@@ -3235,7 +3254,7 @@ async function initEmailSettings() {
       }
     }
     try {
-      const res = await fetch('/api/email/extract-style', {
+      const res = await fetch(`/api/email/extract-style${emailAccountSuffix()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sample_count: 15 }),
@@ -3243,7 +3262,7 @@ async function initEmailSettings() {
       const data = await res.json();
       if (data.success && data.style) {
         if (styleEl) styleEl.value = data.style;
-        try { localStorage.setItem(styleKey, data.style); } catch (_) {}
+        try { localStorage.setItem(styleKey(), data.style); } catch (_) {}
         if (msg) msg.textContent = '✓ Style extracted';
       } else {
         if (msg) msg.textContent = data.error || 'Failed';
@@ -3263,14 +3282,14 @@ async function initEmailSettings() {
     if (msg) msg.textContent = 'Saving...';
     try {
       const style = styleEl ? styleEl.value : '';
-      const res = await fetch('/api/email/style', {
+      const res = await fetch(`/api/email/style${emailAccountSuffix()}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ style }),
       });
       const result = await res.json();
       if (result.success) {
-        try { localStorage.setItem(styleKey, style); } catch (_) {}
+        try { localStorage.setItem(styleKey(), style); } catch (_) {}
       }
       if (msg) msg.textContent = result.success ? '✓ Saved' : 'Failed';
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);

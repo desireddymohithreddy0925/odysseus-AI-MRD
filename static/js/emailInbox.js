@@ -5,7 +5,7 @@
 
 import spinnerModule from './spinner.js';
 import sessionModule from './sessions.js';
-import { initEmailLibrary, openEmailLibrary, closeEmailLibrary, isOpen as isLibOpen } from './emailLibrary.js';
+import { initEmailLibrary, openEmailLibrary, closeEmailLibrary, isOpen as isLibOpen, prewarmEmailLibrary, prewarmUnreadEmails } from './emailLibrary.js?v=20260715emailreplyfix19';
 import * as Modals from './modalManager.js';
 import { applyEdgeDock } from './modalSnap.js';
 import { buildReplyAllCc, extractEmail } from './emailLibrary/replyRecipients.js';
@@ -112,6 +112,7 @@ function _cleanAiReplyText(text) {
   return t
     .replace(/<<<\s*(?:REPLY|SUMMARY|OUTPUT)\s*>>+/gi, '')
     .replace(/<<<\s*END\s*>>+/gi, '')
+    .replace(/<\/?\|(?:assistant|assistan|user|system|tool)\|>?|<\/\|end\|>?/gi, '')
     .trim();
 }
 
@@ -202,6 +203,7 @@ export function init(documentModule) {
       }
     },
   });
+  prewarmEmailLibrary({ delay: 1800 });
   _watchDocOpenToReDockEmail();
 }
 
@@ -348,7 +350,11 @@ async function _refreshUnreadCount() {
     const maxUid = parseInt(data.max_uid || '0', 10) || 0;
 
     // Only show dot if there's a new email above the threshold
-    dot.style.display = maxUid > lastSeen ? '' : 'none';
+    const hasNewUnread = maxUid > lastSeen;
+    dot.style.display = hasNewUnread ? '' : 'none';
+    if (hasNewUnread && !isLibOpen()) {
+      prewarmUnreadEmails({ limit: Math.min(10, Math.max(1, unreadCount)), maxUid }).catch(() => {});
+    }
 
     // Color the dot by urgency tier. Cache the per-uid map so the per-row
     // renderer can reuse it without a second fetch.
@@ -786,8 +792,29 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
       console.error('Failed to read email:', data.error);
       return;
     }
+    // The list row is already populated from the durable email index. Some
+    // IMAP/read paths can return a partial object for long Outlook threads;
+    // never let that create a reply draft with blank To/Subject.
+    const _fallback = (primary, fallback) => {
+      const p = primary == null ? '' : String(primary).trim();
+      if (p) return primary;
+      return fallback == null ? '' : fallback;
+    };
+    data = {
+      ...em,
+      ...data,
+      uid: data.uid || em.uid,
+      subject: _fallback(data.subject, em.subject),
+      from_name: _fallback(data.from_name, em.from_name || em.from_address),
+      from_address: _fallback(data.from_address, em.from_address),
+      to: _fallback(data.to, em.to),
+      cc: _fallback(data.cc, em.cc),
+      date: _fallback(data.date, em.date),
+      message_id: _fallback(data.message_id, em.message_id),
+    };
     if (wantsAiReply) {
-      if (data.cached_ai_reply) {
+      const activeReplyAccount = data.account_id || em.account_id || window.__odysseusActiveEmailAccount || '';
+      if (data.cached_ai_reply && !noteHint && !activeReplyAccount) {
         aiSuggestedBody = _cleanAiReplyText(data.cached_ai_reply);
       } else {
         let draftToastTimer = null;
@@ -813,6 +840,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
               message_id: data.message_id || '',
               uid: String(em.uid || ''),
               folder: _currentFolder,
+              account_id: activeReplyAccount,
               fast: aiReplyMode ? aiReplyMode === 'fast' : _shouldUseFastAiReply(data),
               user_hint: (noteHint || '').trim() || undefined,
             }),
@@ -880,6 +908,9 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     let _baseSubject = (data.subject || '').trim();
     if (subjectPrefix === 'Re: ' && /^re\s*:/i.test(_baseSubject)) subjectPrefix = '';
     else if (subjectPrefix === 'Fwd: ' && /^fwd?\s*:/i.test(_baseSubject)) subjectPrefix = '';
+    if (mode !== 'forward' && !String(toAddress || '').trim()) {
+      throw new Error('Cannot create reply: sender address is missing from this email.');
+    }
     let content = `To: ${toAddress}\nSubject: ${subjectPrefix}${_baseSubject}`;
     if (ccAddresses) content += `\nCc: ${ccAddresses}`;
     if (mode !== 'forward' && data.message_id) content += `\nIn-Reply-To: ${data.message_id}`;
@@ -949,9 +980,10 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
 
     if (_docModule) {
       // Agent-provided reply text should land in the email draft the user
-      // already has open. Otherwise mobile users see the source email while the
-      // agent silently creates a second draft elsewhere.
-      const reuseExisting = mode !== 'forward';
+      // already has open. Plain Reply clicks must create a fresh draft: reusing
+      // old source-UID drafts can reopen stale quote-only/malformed compose docs
+      // and block Send on long threads.
+      const reuseExisting = mode !== 'forward' && !!aiSuggestedBody;
       const existingDocId = (reuseExisting && _docModule.findEmailDocId)
         ? _docModule.findEmailDocId(em.uid, _currentFolder)
         : null;
@@ -959,28 +991,37 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
         if (!_docModule.isPanelOpen()) _docModule.openPanel();
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         await _docModule.loadDocument(existingDocId);
+        if (typeof _docModule.ensureEmailDraftEnvelope === 'function') {
+          await _docModule.ensureEmailDraftEnvelope(existingDocId, content);
+        }
         if (aiSuggestedBody && typeof _docModule.replaceEmailReplyBody === 'function') {
           await _docModule.replaceEmailReplyBody(existingDocId, aiSuggestedBody, { force: true });
         }
         _bringEmailReplyDraftToFrontOnMobile();
       } else {
-        const activeSid = await _createEmailChat(data);
+        let activeSid = await _createEmailChat(data, { forceNew: true });
         if (!activeSid) {
           console.error('reply: could not obtain a session_id');
           import('./ui.js').then(m => m.showError && m.showError('Could not start a reply chat.')).catch(() => {});
           return;
         }
 
-        const docRes = await fetch(`${API_BASE}/api/document`, {
+        const createReplyDoc = (sessionId) => fetch(`${API_BASE}/api/document`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            session_id: activeSid,
+            session_id: sessionId,
             title: data.subject,
             content: content,
             language: 'email',
           }),
         });
+        let docRes = await createReplyDoc(activeSid);
+        if (docRes.status === 404) {
+          console.warn('[reply-debug] draft session rejected; retrying in a fresh email chat', activeSid);
+          activeSid = await _createEmailChat(data, { forceNew: true });
+          if (activeSid) docRes = await createReplyDoc(activeSid);
+        }
         if (!docRes.ok) {
           const errText = await docRes.text();
           console.error('[reply-debug] POST /api/document failed', docRes.status, errText);
@@ -1255,9 +1296,10 @@ async function _toggleDone(em, itemEl) {
   }
 }
 
-async function _createEmailChat(emailData) {
+async function _createEmailChat(emailData, opts = {}) {
   const subject = String(emailData?.subject || 'New Email').trim() || 'New Email';
   const title = subject === 'New Email' ? 'New Email' : `Email: ${subject.slice(0, 60)}`;
+  const forceNew = !!opts.forceNew;
   try {
     const currentSid = sessionModule.getCurrentSessionId?.() || '';
     const current = sessionModule.getSessions?.().find(s => s.id === currentSid);
@@ -1268,7 +1310,7 @@ async function _createEmailChat(emailData) {
       && Number(current.message_count || 0) === 0
       && current.folder !== 'Assistant'
       && current.folder !== 'Tasks';
-    if (currentIsBlank) {
+    if (!forceNew && currentIsBlank) {
       const meta = document.getElementById('current-meta');
       if (meta) meta.textContent = title;
       return current.id;
@@ -1319,22 +1361,28 @@ async function _composeNew() {
   // (doc shows for a frame, then slides up again). Mount once, at injectFreshDoc,
   // after the session + doc exist.
   try {
-    const sid = await _createEmailChat({ subject: 'New Email' });
+    let sid = await _createEmailChat({ subject: 'New Email' });
     if (!sid) {
       console.error('compose: could not obtain a session_id');
       import('./ui.js').then(m => m.showError && m.showError('Could not start a new email (no session).')).catch(() => {});
       return;
     }
-    const res = await fetch(`${API_BASE}/api/document`, {
+    const createComposeDoc = (sessionId) => fetch(`${API_BASE}/api/document`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        session_id: sid,
+        session_id: sessionId,
         title: 'New Email',
         content: 'To: \nSubject: \n---\n',
         language: 'email',
       }),
     });
+    let res = await createComposeDoc(sid);
+    if (res.status === 404) {
+      console.warn('[compose-debug] draft session rejected; retrying in a fresh email chat', sid);
+      sid = await _createEmailChat({ subject: 'New Email' }, { forceNew: true });
+      if (sid) res = await createComposeDoc(sid);
+    }
     if (!res.ok) {
       console.error('compose POST failed', res.status, await res.text().catch(() => ''));
       import('./ui.js').then(m => m.showError && m.showError('Failed to create new email (' + res.status + ')')).catch(() => {});
