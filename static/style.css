@@ -11334,7 +11334,7 @@ textarea.memory-add-input {
 #email-lib-bulk-delete.email-bulk-loading .email-bulk-loading-label,
 #email-lib-bulk-actions.email-bulk-loading .email-bulk-loading-label {
   position: relative;
-  top: -2px;
+  top: 0;
 }
 /* Drafts bulk bar defaults to justify-content:flex-end (whole row hugs the
    right). Reset it so All + count sit on the left and only the action button
