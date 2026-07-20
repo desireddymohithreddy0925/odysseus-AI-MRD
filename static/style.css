@@ -23870,8 +23870,14 @@ body:not(.welcome-ready) #welcome-screen {
 #rail-tasks.task-failure-pending {
   color: var(--red, #f87171);
 }
+#tool-tasks-btn.task-completion-pending,
+#rail-tasks.task-completion-pending {
+  color: var(--accent, var(--green, #86efac));
+}
 #tool-tasks-btn.task-failure-pending::after,
-#rail-tasks.task-failure-pending::after {
+#rail-tasks.task-failure-pending::after,
+#tool-tasks-btn.task-completion-pending::after,
+#rail-tasks.task-completion-pending::after {
   content: '';
   width: 7px;
   height: 7px;
@@ -23880,13 +23886,29 @@ body:not(.welcome-ready) #welcome-screen {
   box-shadow: 0 0 7px var(--red, #f87171), 0 0 3px var(--red, #f87171);
   flex: 0 0 auto;
 }
+#tool-tasks-btn.task-completion-pending::after,
+#rail-tasks.task-completion-pending::after {
+  background: var(--accent, var(--green, #86efac));
+  box-shadow: 0 0 7px var(--accent, var(--green, #86efac)), 0 0 3px var(--accent, var(--green, #86efac));
+}
+#tool-tasks-btn.task-failure-pending.task-completion-pending,
+#rail-tasks.task-failure-pending.task-completion-pending {
+  color: var(--red, #f87171);
+}
+#tool-tasks-btn.task-failure-pending.task-completion-pending::after,
+#rail-tasks.task-failure-pending.task-completion-pending::after {
+  background: var(--red, #f87171);
+  box-shadow: 0 0 7px var(--red, #f87171), 0 0 3px var(--red, #f87171);
+}
 @media (min-width: 769px) {
   #tool-tasks-btn #assistant-notif-dot.sidebar-notif-dot,
-  #tool-tasks-btn.task-failure-pending::after {
+  #tool-tasks-btn.task-failure-pending::after,
+  #tool-tasks-btn.task-completion-pending::after {
     transform: translateX(-2px);
   }
 }
-#rail-tasks.task-failure-pending::after {
+#rail-tasks.task-failure-pending::after,
+#rail-tasks.task-completion-pending::after {
   position: absolute;
   right: 8px;
   top: 8px;
@@ -23899,6 +23921,37 @@ body:not(.welcome-ready) #welcome-screen {
 .tasks-activity-list {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+.task-completed-preview-row {
+  cursor: default;
+  margin-bottom: 6px;
+  padding: 8px 10px 10px;
+  max-height: none;
+  overflow: visible;
+}
+.task-completed-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 20px;
+  font-size: 11px;
+}
+.task-completed-chat-preview {
+  padding: 0 0 4px;
+}
+.task-completed-chat-preview .doclib-chat-preview-messages {
+  max-height: 220px;
+  margin-top: 7px;
+}
+.task-completed-chat-preview .doclib-chat-bubble {
+  max-width: 92%;
+}
+.task-completed-chat-preview .doclib-chat-preview-actions {
+  top: 2px;
+  margin-top: 4px;
+}
+.task-completed-preview-row .task-log-time {
+  margin-left: 8px;
 }
 
 /* Tasks tabs reuse the .memory-tab look. The Brain window's tab bar is
