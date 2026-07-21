@@ -5,7 +5,7 @@
 
 import spinnerModule from './spinner.js';
 import sessionModule from './sessions.js';
-import { initEmailLibrary, openEmailLibrary, closeEmailLibrary, isOpen as isLibOpen, prewarmEmailLibrary, prewarmUnreadEmails } from './emailLibrary.js?v=20260715emailreplyfix19';
+import { initEmailLibrary, openEmailLibrary, closeEmailLibrary, isOpen as isLibOpen, prewarmEmailLibrary, prewarmUnreadEmails } from './emailLibrary.js?v=20260721emailreplyfast1';
 import * as Modals from './modalManager.js';
 import { applyEdgeDock } from './modalSnap.js';
 import { buildReplyAllCc, extractEmail } from './emailLibrary/replyRecipients.js';
@@ -114,18 +114,6 @@ function _cleanAiReplyText(text) {
     .replace(/<<<\s*END\s*>>+/gi, '')
     .replace(/<\/?\|(?:assistant|assistan|user|system|tool)\|>?|<\/\|end\|>?/gi, '')
     .trim();
-}
-
-function _shouldUseFastAiReply(data) {
-  const body = String(data?.body || data?.body_html || '');
-  const subject = String(data?.subject || '');
-  const atts = Array.isArray(data?.attachments) ? data.attachments : [];
-  if (atts.length > 0) return false;
-  const text = `${subject}\n${body}`.toLowerCase();
-  if (/\b(attach(?:ed|ment)?|pdf|document|contract|invoice|receipt|quote|estimate|proposal|question|questions|details|schedule|booking|reservation|meeting|calendar|availability|confirm|confirmation|review|sign|signature)\b/.test(text)) {
-    return false;
-  }
-  return body.length < 2500;
 }
 
 let _emails = [];
@@ -757,7 +745,7 @@ function _createEmailItem(em) {
 }
 
 async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', noteHint = '', prefilledBody = '') {
-  const aiReplyMode = mode === 'ai-reply-fast' ? 'fast' : (mode === 'ai-reply-full' ? 'full' : '');
+  const aiReplyMode = mode === 'ai-reply-fast' ? 'fast' : '';
   const wantsAiReply = mode === 'ai-reply' || !!aiReplyMode;
   // Body pre-fill from the agent's open_email_reply tool call takes the
   // same insertion slot as an AI-suggested body — both land just before
@@ -841,7 +829,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
               uid: String(em.uid || ''),
               folder: _currentFolder,
               account_id: activeReplyAccount,
-              fast: aiReplyMode ? aiReplyMode === 'fast' : _shouldUseFastAiReply(data),
+              fast: true,
               user_hint: (noteHint || '').trim() || undefined,
             }),
           });
@@ -995,7 +983,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
           await _docModule.ensureEmailDraftEnvelope(existingDocId, content);
         }
         if (aiSuggestedBody && typeof _docModule.replaceEmailReplyBody === 'function') {
-          await _docModule.replaceEmailReplyBody(existingDocId, aiSuggestedBody, { force: true });
+          await _docModule.replaceEmailReplyBody(existingDocId, aiSuggestedBody, { force: false });
         }
         _bringEmailReplyDraftToFrontOnMobile();
       } else {

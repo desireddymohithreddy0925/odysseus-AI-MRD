@@ -30714,8 +30714,7 @@ button .spinner-whirlpool {
    Also lift the cluster 1px more.  !important needed because the
    @container query overlay rule has the same selector specificity. */
 @media (max-width: 768px) {
-  .memory-toolbar-btn[data-mode="ai-reply-fast"],
-  .memory-toolbar-btn[data-mode="ai-reply-full"] {
+  .memory-toolbar-btn[data-mode="ai-reply-fast"] {
     height: 30px !important;
     min-height: 30px !important;
   }
