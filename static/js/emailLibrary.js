@@ -921,6 +921,18 @@ function _syncUnreadTabBadge(count) {
   });
 }
 
+function _syncCurrentAccountUnreadCount(count) {
+  const accountId = String(state._libAccountId || '');
+  if (!accountId) return;
+  const nextCount = Math.max(0, Number(count) || 0);
+  const prev = _accountUnreadState.get(accountId) || {};
+  _accountUnreadState.set(accountId, {
+    ...prev,
+    unreadCount: nextCount,
+  });
+  _renderAccountsStrip();
+}
+
 function _syncUnreadWindowGlow() {
   document.getElementById('email-lib-modal')?.classList.toggle('email-lib-unread-active', state._libFilter === 'unread');
 }
@@ -1892,13 +1904,13 @@ function _resetBulkSelectionForContextChange({ rerender = false } = {}) {
   }
 }
 
-function _resetEmailListForFreshLoad() {
+function _resetEmailListForFreshLoad({ useCache = true } = {}) {
   _exitEmailReaderModeForList();
   _resetBulkSelectionForContextChange();
   state._libOffset = 0;
   _libLoadSeq += 1;
   const ck = _libCacheKey();
-  const cached = _libCacheGet(ck);
+  const cached = useCache ? _libCacheGet(ck) : null;
   if (cached && Array.isArray(cached.emails) && cached.emails.length) {
     state._libEmails = cached.emails.slice();
     state._libTotal = cached.total || state._libEmails.length;
@@ -1939,8 +1951,8 @@ function _exitEmailReaderModeForList() {
 }
 
 function _loadEmailsFresh() {
-  _resetEmailListForFreshLoad();
-  return _loadEmails({ force: true, useCache: true });
+  _resetEmailListForFreshLoad({ useCache: false });
+  return _loadEmails({ force: true, useCache: false });
 }
 
 function _isChatInteractionBusy() {
@@ -2912,9 +2924,9 @@ function _renderAccountsStrip() {
     btn.addEventListener('click', async () => {
       state._libAccountId = btn.dataset.accId || null;
       _publishActiveAccount();
-      _resetEmailListForFreshLoad();
+      _resetEmailListForFreshLoad({ useCache: false });
       _renderAccountsStrip();
-      _loadEmails({ useCache: true });
+      _loadEmails({ force: true, useCache: false });
       _loadFolders({ resetMissing: true }).catch(() => {});
       _refreshAccountUnreadHighlights().catch(() => {});
     });
@@ -4309,7 +4321,7 @@ function _appendEmailSearchProgressRow(grid) {
 // it would toggle the filter off — so the label needs to advertise the
 // action, not the now-current view. Uses the cheap unread-state endpoint for
 // the normal badge; silent on failure.
-async function _refreshUnreadBadge() {
+async function _refreshUnreadBadge({ unreadCountOverride = null } = {}) {
   const badge = document.getElementById('email-lib-unread-badge');
   if (!badge) return;
   try {
@@ -4317,13 +4329,19 @@ async function _refreshUnreadBadge() {
     if (folder === '__scheduled__') { badge.style.display = 'none'; return; }
     const cfg = await _fetchEmailSettingsConfig().catch(() => null);
     const awayActive = _isAutoReplyActiveForCurrentAccount(cfg);
-    const res = await fetch(emailApiUrl('/api/email/unread-state', {
-      folder,
-      account_id: state._libAccountId || undefined,
-    }));
-    const data = await res.json();
-    const n = data.unread_count || 0;
+    let n;
+    if (unreadCountOverride !== null && unreadCountOverride !== undefined) {
+      n = Math.max(0, Number(unreadCountOverride) || 0);
+    } else {
+      const res = await fetch(emailApiUrl('/api/email/unread-state', {
+        folder,
+        account_id: state._libAccountId || undefined,
+      }));
+      const data = await res.json();
+      n = data.unread_count || 0;
+    }
     _syncUnreadTabBadge(n);
+    if (folder === 'INBOX') _syncCurrentAccountUnreadCount(n);
     badge.classList.toggle('email-lib-away-badge', awayActive);
     if (awayActive) {
       badge.textContent = 'Away';
@@ -4476,8 +4494,12 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
       const sync = data.sync || {};
       if (sp) sp.destroy();
       paintData({ emails: data.emails || [], total: data.total || 0, sync });
-      _refreshUnreadBadge();
-      _refreshAccountUnreadHighlights().catch(() => {});
+      if (filterAtStart === 'unread') {
+        _refreshUnreadBadge({ unreadCountOverride: data.total || 0 });
+      } else {
+        _refreshUnreadBadge();
+        _refreshAccountUnreadHighlights().catch(() => {});
+      }
     }
   } catch (e) {
     if (seq !== _libLoadSeq || accountAtStart !== (state._libAccountId || '')) return;
