@@ -881,6 +881,26 @@ export function updateModelPicker() {
       modelId = null;
     }
   }
+  if (!modelId && !currentSessionId && !_pendingChat && _deps.setPendingChat) {
+    let cachedDefault = null;
+    try {
+      cachedDefault = window.__odysseusDefaultChat || null;
+    } catch (_) {}
+    if (!cachedDefault || !cachedDefault.endpoint_url || !cachedDefault.model) {
+      try {
+        cachedDefault = JSON.parse(localStorage.getItem('odysseus-default-chat-cache') || 'null');
+      } catch (_) {}
+    }
+    if (cachedDefault && cachedDefault.endpoint_url && cachedDefault.model) {
+      modelId = cachedDefault.model;
+      _deps.setPendingChat({
+        url: cachedDefault.endpoint_url,
+        modelId,
+        endpointId: cachedDefault.endpoint_id || '',
+        source: 'default',
+      });
+    }
+  }
   // SECURITY: deliberately NOT auto-injecting `odysseus-model-favorites[0]`
   // here. localStorage favorites are per-browser, not per-user, so on a
   // shared browser the previous account's first favorited model would
