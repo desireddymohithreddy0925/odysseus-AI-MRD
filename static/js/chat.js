@@ -109,7 +109,6 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
 
   async function _adoptOpenedSessionBeforeAutoCreate() {
     if (!sessionModule || !sessionModule.getCurrentSessionId || sessionModule.getCurrentSessionId()) return true;
-    if (sessionModule.hasPendingChat && sessionModule.hasPendingChat()) return false;
     const activeRowId = document.querySelector('.list-item.active-session[data-session-id], .session-item.active[data-session-id]')?.dataset?.sessionId || '';
     const hashId = _hashSessionCandidate();
     const targetId = activeRowId || hashId;
