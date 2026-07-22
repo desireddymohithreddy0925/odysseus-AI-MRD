@@ -1925,6 +1925,10 @@ body.bg-pattern-sparkles {
     .chat-pull-refresh canvas {
       display: block;
     }
+    #email-lib-modal .email-pull-refresh {
+      top: 112px;
+      z-index: 4;
+    }
     /* Sortable Cookbook column headers had no visual cue, so users couldn't tell
        a header was clickable (the Newest sort on the Model column was invisible).
        Show a pointer + hover highlight, and underline the active sort column. */
