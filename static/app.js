@@ -2573,6 +2573,11 @@ function initializeEventListeners() {
       incognitoBtn.title = chk.checked ? 'Disable Nobody mode' : 'Enable Nobody mode — no memory, no history saved';
       const welcomeName = document.querySelector('.welcome-name');
       if (chk.checked) {
+        try {
+          if (sessionModule && sessionModule.setCurrentSessionId) sessionModule.setCurrentSessionId(null);
+          const box = el('chat-history');
+          if (box) box.innerHTML = '';
+        } catch (_) {}
         incognitoBtn.innerHTML = INCOGNITO_EYE_CLOSED + '<span class="incognito-label">Nobody</span>';
         if (welcomeName) {
           welcomeName.dataset.originalHtml = welcomeName.innerHTML;

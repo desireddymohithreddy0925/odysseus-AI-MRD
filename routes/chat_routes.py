@@ -1123,6 +1123,11 @@ def setup_chat_routes(
                 "manage_memory",      # persistent memory store
                 "search_chats",       # past chat history
                 "manage_skills",      # skill presets tied to user
+                "create_session",
+                "list_sessions",
+                "manage_session",
+                "send_to_session",
+                "chat_with_model",
             })
 
         # Active email reader open → strip the tools that let the agent drift

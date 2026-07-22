@@ -2273,7 +2273,11 @@ export async function materializePendingSession() {
 
 export function preMaterializePendingSession() {
   if (!_pendingChat || _pendingMaterializePromise) return;
+  const incognitoChk = document.getElementById('incognito-toggle');
+  if (incognitoChk && incognitoChk.checked) return;
   setTimeout(() => {
+    const chk = document.getElementById('incognito-toggle');
+    if (chk && chk.checked) return;
     if (_pendingChat && !_pendingMaterializePromise) {
       materializePendingSession().catch(() => {});
     }
@@ -2285,6 +2289,10 @@ export function getPendingChat() { return _pendingChat; }
 // Getters for external access
 export function getCurrentSessionId() {
   return currentSessionId;
+}
+
+export function isCurrentSessionIncognito() {
+  return !!(currentSessionId && _isIncognitoSession(currentSessionId));
 }
 
 export function getSessions() {

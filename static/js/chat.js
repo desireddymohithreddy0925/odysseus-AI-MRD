@@ -959,7 +959,17 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
       }
     }
 
-    await _adoptOpenedSessionBeforeAutoCreate();
+    const incognitoChkForSend = el('incognito-toggle');
+    const isIncognitoForSend = !!(incognitoChkForSend && incognitoChkForSend.checked);
+
+    const isCurrentIncognitoSession = !!(sessionModule.isCurrentSessionIncognito && sessionModule.isCurrentSessionIncognito());
+    if (isIncognitoForSend && !isCurrentIncognitoSession && sessionModule.setCurrentSessionId) {
+      sessionModule.setCurrentSessionId(null);
+    }
+
+    if (!isIncognitoForSend) {
+      await _adoptOpenedSessionBeforeAutoCreate();
+    }
 
     const selectedRouteForSend = (() => {
       try {
@@ -1423,8 +1433,7 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
 	      const toggleState = Storage.loadToggleState();
 	      const isPlanMode = !!toggleState.plan_mode && !(el('research-toggle') && el('research-toggle').checked);
 	      let isAgentMode = (toggleState.mode || 'chat') === 'agent';
-	      const incognitoChk = el('incognito-toggle');
-	      const isIncognito = !!(incognitoChk && incognitoChk.checked);
+      const isIncognito = isIncognitoForSend;
 	      const workspaceAgentIntent = !isIncognito && /\b(fix|debug|implement|change|update|refactor|patch|review|test|run|execute|start|launch|build|lint|typecheck|benchmark|eval|terminal[- ]bench|tbench|repo|repository|codebase|project|app|server|api|frontend|backend|bug|issue|pr|file|folder|directory|source|logs?|trace|stacktrace|traceback|docker|container|tmux|terminal|shell|git|branch|commit|diff|pytest|process|port|endpoint|computer|machine|laptop|device|system)\b/i.test(String(msg || ''));
 	      if (isPlanMode || _pendingApprovedPlan) {
 	        isAgentMode = true;
