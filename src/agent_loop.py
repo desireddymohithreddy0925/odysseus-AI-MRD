@@ -42,6 +42,32 @@ from src.agent_tools import (
 
 logger = logging.getLogger(__name__)
 
+_BROWSER_MCP_PREFIX = "mcp__builtin_browser__"
+
+
+def _expand_browser_mcp_tools(tool_names: Set[str], mcp_mgr) -> Set[str]:
+    """Expand browser intent to every connected Playwright MCP tool.
+
+    Playwright MCP tool names can change between releases (for example
+    browser_click vs browser_mouse_down). Route-level intent only needs to say
+    "browser"; the final prompt/schema set should use the names the connected
+    MCP server actually exposed.
+    """
+    names = set(tool_names or set())
+    if not mcp_mgr:
+        return names
+    if not any(name == "builtin_browser" or name.startswith(_BROWSER_MCP_PREFIX) for name in names):
+        return names
+    try:
+        for tool in mcp_mgr.get_all_tools():
+            if tool.get("server_id") == "builtin_browser" and not tool.get("is_disabled"):
+                qualified = tool.get("qualified_name")
+                if qualified:
+                    names.add(qualified)
+    except Exception as exc:
+        logger.warning("Failed to expand browser MCP tools: %s", exc)
+    return names
+
 
 def _looks_like_notes_list_request(text: str) -> bool:
     """Whether the user is asking to see existing notes, not create one."""
@@ -3433,6 +3459,9 @@ async def stream_agent_loop(
             from src.tool_index import ALWAYS_AVAILABLE
             _relevant_tools = set(ALWAYS_AVAILABLE)
         _relevant_tools.update(forced_set)
+
+    if not guide_only and _relevant_tools is not None:
+        _relevant_tools = _expand_browser_mcp_tools(_relevant_tools, mcp_mgr)
 
     # The skill index injected by _build_system_prompt tells the model to
     # call `manage_skills action=view`, and Jaccard-matched skills are pasted

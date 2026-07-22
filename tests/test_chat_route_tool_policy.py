@@ -79,6 +79,23 @@ def test_allow_web_search_reads_from_body_as_fallback():
     )
 
 
+def test_browser_form_followups_include_approval_and_send_phrases():
+    """Short approval replies after a form/browser turn must keep browser tools available."""
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert "approved" in source
+    assert "proceed" in source
+    assert "send(?:\\s+it)?" in source
+    assert "submit(?:\\s+it)?" in source
+
+
+def test_agent_loop_expands_browser_mcp_tools_from_connected_server():
+    """Browser intent must not depend on stale hardcoded Playwright tool names."""
+    source = (Path(__file__).resolve().parent.parent / "src" / "agent_loop.py").read_text(encoding="utf-8")
+    assert "def _expand_browser_mcp_tools" in source
+    assert "server_id\") == \"builtin_browser\"" in source
+    assert "_relevant_tools = _expand_browser_mcp_tools(_relevant_tools, mcp_mgr)" in source
+
+
 def test_disabled_tools_respects_missing_vs_explicit_toggles():
     """Bash still defers to privileges, but web is an explicit per-turn opt-in.
     """

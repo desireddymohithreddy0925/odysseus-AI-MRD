@@ -136,6 +136,9 @@ def _browser_mcp_args(args: list[str]) -> list[str]:
         browser = _find_browser_executable()
         if browser:
             out.extend(["--executable-path", browser])
+    if os.environ.get("ODYSSEUS_BROWSER_ISOLATED", "1").lower() not in ("0", "false", "no"):
+        if "--isolated" not in out and "--user-data-dir" not in out:
+            out.append("--isolated")
     if os.environ.get("ODYSSEUS_BROWSER_NO_SANDBOX", "1").lower() not in ("0", "false", "no"):
         if "--no-sandbox" not in out and "--sandbox" not in out:
             out.append("--no-sandbox")

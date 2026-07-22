@@ -111,7 +111,8 @@ def _ensure_current_request_is_latest_user(messages: List[Dict[str, Any]], curre
 _WEB_FOLLOWUP_RE = re.compile(
     r"^\s*(?:(?:can|could|would|will)\s+you\s+)?"
     r"(?:check|try\s+again|look(?:\s+now|\s+it\s+up)?|search(?:\s+now|\s+online|\s+it)?|"
-    r"do\s+it|again)\??\s*$",
+    r"do\s+it|again|approved|approve(?:d)?|yes|ok(?:ay)?|proceed|go\s+ahead|"
+    r"send(?:\s+it)?|submit(?:\s+it)?|email(?:\s+them|\s+it)?)\??\s*$",
     re.I,
 )
 _RECENT_WEB_CONTEXT_RE = re.compile(

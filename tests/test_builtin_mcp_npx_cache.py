@@ -58,7 +58,31 @@ def test_browser_mcp_args_use_configured_browser_executable(monkeypatch):
 
     assert "--executable-path" in args
     assert "/usr/bin/chromium" in args
+    assert "--isolated" in args
     assert "--no-sandbox" in args
+
+
+def test_browser_mcp_args_can_use_persistent_profile_when_requested(monkeypatch):
+    monkeypatch.setenv("ODYSSEUS_BROWSER_EXECUTABLE", "/usr/bin/chromium")
+    monkeypatch.setenv("ODYSSEUS_BROWSER_ISOLATED", "0")
+    builtin_mcp = _load_builtin_mcp(monkeypatch)
+
+    args = builtin_mcp._browser_mcp_args(["-y", "@playwright/mcp@latest", "--headless"])
+
+    assert "--executable-path" in args
+    assert "--isolated" not in args
+
+
+def test_browser_mcp_args_respect_explicit_user_data_dir(monkeypatch):
+    monkeypatch.setenv("ODYSSEUS_BROWSER_EXECUTABLE", "/usr/bin/chromium")
+    builtin_mcp = _load_builtin_mcp(monkeypatch)
+
+    args = builtin_mcp._browser_mcp_args([
+        "-y", "@playwright/mcp@latest", "--headless", "--user-data-dir", "/tmp/profile",
+    ])
+
+    assert "--user-data-dir" in args
+    assert "--isolated" not in args
 
 
 def test_browser_mcp_args_can_keep_sandbox(monkeypatch):
