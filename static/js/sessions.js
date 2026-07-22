@@ -1711,20 +1711,14 @@ export async function loadSessions() {
     // the targetId resolution above (hash → currentSession → lastSessionId →
     // most-recent).
     if (_isFirstLoad) sessionStorage.setItem('ody-session-active', '1');
-    if (_isFirstLoad || _freshRootLoad) {
-      if (!targetId) {
-        try {
-          const dc = await _getPreferredDefaultChat();
-          if (dc && dc.endpoint_url && dc.model) {
-            await createDirectChat(dc.endpoint_url, dc.model, dc.endpoint_id, { source: 'default' });
-            // On mobile, hide sidebar so user lands directly in chat
-            if (window.innerWidth < 768) {
-              const sb = document.getElementById('sidebar');
-              if (sb) sb.classList.add('hidden');
-            }
-            return; // createDirectChat handles the pending fresh chat UI
-          }
-        } catch (_) { /* no default model configured */ }
+    if ((_isFirstLoad || _freshRootLoad) && !targetId) {
+      // Land on a visually fresh chat without creating hidden pending session
+      // state. The send path can create the default-backed session when the
+      // user actually submits. Pre-creating here races with opening an existing
+      // chat and was causing sends to jump into brand-new chats.
+      if (window.innerWidth < 768) {
+        const sb = document.getElementById('sidebar');
+        if (sb) sb.classList.add('hidden');
       }
     }
 
@@ -1794,6 +1788,7 @@ export async function selectSession(id, { keepSidebar = false, showLoading = tru
       try { window.documentModule.clearSelection(); } catch {}
     }
     currentSessionId = id;
+    try { window.__odysseusLastSelectedSessionId = id; } catch (_) {}
     // Identify Assistant / task-output sessions so we don't "trap" the user
     // there on return. Skipped from both `lastSessionId` persistence and the
     // URL hash — the user complained that coming back to Odysseus kept
@@ -2157,6 +2152,7 @@ export function createDirectChat(url, modelId, endpointId, opts = {}) {
   _skipAutoSelect = true;
   _suppressNextSessionLoading = true;
   currentSessionId = null;
+  try { window.__odysseusLastSelectedSessionId = ''; } catch (_) {}
   Storage.remove('lastSessionId');
   history.replaceState(null, '', window.location.pathname);
   document.querySelectorAll('.list-item.active-session, .session-item.active').forEach(el => {
@@ -2333,6 +2329,7 @@ export function getCurrentEndpointUrl() {
 export function setCurrentSessionId(id) {
   _sessionNavToken++;
   currentSessionId = id;
+  try { window.__odysseusLastSelectedSessionId = id || ''; } catch (_) {}
   if (!id) {
     _suppressNextSessionLoading = true;
     Storage.remove('lastSessionId');

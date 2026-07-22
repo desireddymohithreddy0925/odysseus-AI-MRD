@@ -111,7 +111,8 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
     if (!sessionModule || !sessionModule.getCurrentSessionId || sessionModule.getCurrentSessionId()) return true;
     const activeRowId = document.querySelector('.list-item.active-session[data-session-id], .session-item.active[data-session-id]')?.dataset?.sessionId || '';
     const hashId = _hashSessionCandidate();
-    const targetId = activeRowId || hashId;
+    const lastSelectedId = String(window.__odysseusLastSelectedSessionId || '').trim();
+    const targetId = activeRowId || hashId || lastSelectedId;
     if (!targetId) return false;
     try {
       const sessions = sessionModule.getSessions ? (sessionModule.getSessions() || []) : [];
