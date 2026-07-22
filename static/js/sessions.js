@@ -2206,7 +2206,7 @@ export async function materializePendingSession() {
   const pending = _pendingChat;
   if (!pending) return false;
 
-  _pendingMaterializePromise = (async () => {
+  const materializePromise = (async () => {
 
     const incognitoChk = document.getElementById('incognito-toggle');
     const isIncognito = incognitoChk && incognitoChk.checked;
@@ -2244,6 +2244,16 @@ export async function materializePendingSession() {
       return false;
     }
 
+    // The user may have opened an existing chat while this deferred default
+    // session was being created. Do not let a stale response steal
+    // currentSessionId and make the next send land in a brand-new chat.
+    if (_pendingChat !== pending) {
+      if (payload.id) {
+        fetch(`${API_BASE}/api/session/${encodeURIComponent(payload.id)}`, { method: 'DELETE' }).catch(() => {});
+      }
+      return false;
+    }
+
     if (isIncognito && payload.id) {
       _markIncognito(payload.id);
     }
@@ -2254,7 +2264,9 @@ export async function materializePendingSession() {
     }
     _pendingChat = null;
     currentSessionId = payload.id;
-    Storage.set('lastSessionId', payload.id);
+    if (!isIncognito) {
+      Storage.set('lastSessionId', payload.id);
+    }
 
     // Reload the sidebar in the background. Awaiting this used to block the first
     // prompt in a new/pending chat behind startup fetches and slow /api/sessions
@@ -2263,11 +2275,14 @@ export async function materializePendingSession() {
     loadSessions().catch(() => {});
     return true;
   })();
+  _pendingMaterializePromise = materializePromise;
 
   try {
-    return await _pendingMaterializePromise;
+    return await materializePromise;
   } finally {
-    _pendingMaterializePromise = null;
+    if (_pendingMaterializePromise === materializePromise) {
+      _pendingMaterializePromise = null;
+    }
   }
 }
 
