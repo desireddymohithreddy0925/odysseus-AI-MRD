@@ -1955,6 +1955,117 @@ function _loadEmailsFresh() {
   return _loadEmails({ force: true, useCache: false });
 }
 
+async function _refreshEmailLibraryFromUi(btn = null) {
+  btn?.classList.add('email-lib-refreshing');
+  state._libOffset = 0;
+  // Don't wipe state._libEmails — _loadEmails will paint the current
+  // list while the forced refetch runs, so the grid doesn't blank out
+  // mid-refresh. `force: true` adds the cache-buster so the server's
+  // 8s list cache is bypassed for an actually-fresh result.
+  try {
+    await _loadEmails({ force: true });
+  } finally {
+    btn?.classList.remove('email-lib-refreshing');
+    // Flash a checkmark for ~900ms so the user gets a clear "done" cue.
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.classList.add('email-lib-refresh-done');
+      btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg>';
+      setTimeout(() => {
+        if (btn.classList.contains('email-lib-refresh-done')) {
+          btn.classList.remove('email-lib-refresh-done');
+          btn.innerHTML = orig;
+        }
+      }, 900);
+    }
+  }
+}
+
+function _initMobileEmailPullRefresh() {
+  const grid = document.getElementById('email-lib-grid');
+  const modal = document.getElementById('email-lib-modal');
+  const host = modal?.querySelector('.admin-card');
+  if (!grid || !host || grid.dataset.pullRefreshBound === '1') return;
+  if (!('ontouchstart' in window || navigator.maxTouchPoints > 0)) return;
+  grid.dataset.pullRefreshBound = '1';
+
+  const THRESHOLD = 72;
+  const MAX_PULL = 104;
+  let startY = 0;
+  let pullY = 0;
+  let tracking = false;
+  let refreshing = false;
+
+  const indicator = document.createElement('div');
+  indicator.className = 'chat-pull-refresh email-pull-refresh';
+  indicator.setAttribute('aria-hidden', 'true');
+  indicator.innerHTML = '<div class="chat-pull-refresh-spinner"></div>';
+  host.prepend(indicator);
+  const spinnerMount = indicator.querySelector('.chat-pull-refresh-spinner');
+  try {
+    const spinner = spinnerModule.createWhirlpool(18);
+    spinnerMount.replaceChildren(spinner.element);
+  } catch (_) {}
+
+  function setPull(px, active = false) {
+    pullY = Math.max(0, Math.min(MAX_PULL, px));
+    const pct = Math.min(1, pullY / THRESHOLD);
+    indicator.style.setProperty('--pull-refresh-y', `${pullY}px`);
+    indicator.style.setProperty('--pull-refresh-progress', `${pct}`);
+    indicator.classList.toggle('is-visible', active || refreshing || pullY > 2);
+    indicator.classList.toggle('is-ready', pct >= 1 && !refreshing);
+    indicator.classList.toggle('is-refreshing', refreshing);
+  }
+
+  async function runRefresh() {
+    if (refreshing) return;
+    refreshing = true;
+    setPull(THRESHOLD, true);
+    try {
+      await _refreshEmailLibraryFromUi(document.getElementById('email-lib-refresh-btn'));
+    } catch (err) {
+      console.warn('email pull refresh failed:', err);
+    } finally {
+      refreshing = false;
+      setPull(0, false);
+    }
+  }
+
+  grid.addEventListener('touchstart', (e) => {
+    if (refreshing || window.innerWidth > 768) return;
+    if (grid.scrollTop > 0) return;
+    if (e.target?.closest?.('button, input, textarea, select, a, .email-card-reader, .doclib-card-expanded')) return;
+    tracking = true;
+    startY = e.touches[0].clientY;
+    setPull(0, false);
+  }, { passive: true });
+
+  grid.addEventListener('touchmove', (e) => {
+    if (!tracking || refreshing) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) {
+      setPull(0, false);
+      return;
+    }
+    if (grid.scrollTop <= 0) {
+      e.preventDefault();
+      setPull(dy * 0.62, true);
+    }
+  }, { passive: false });
+
+  grid.addEventListener('touchend', () => {
+    if (!tracking) return;
+    tracking = false;
+    if (pullY >= THRESHOLD) runRefresh();
+    else setPull(0, false);
+  }, { passive: true });
+
+  grid.addEventListener('touchcancel', () => {
+    tracking = false;
+    if (!refreshing) setPull(0, false);
+  }, { passive: true });
+}
+
 function _isChatInteractionBusy() {
   try {
     if (window.__odysseusChatBusy) return true;
@@ -2579,31 +2690,9 @@ export function openEmailLibrary(opts = {}) {
   _initEmailSearchChipBar();
 
   document.getElementById('email-lib-refresh-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('email-lib-refresh-btn');
-    btn?.classList.add('email-lib-refreshing');
-    state._libOffset = 0;
-    // Don't wipe state._libEmails — _loadEmails will paint the cached
-    // list while the forced refetch runs, so the grid doesn't blank out
-    // mid-refresh. `force: true` adds the cache-buster so the server's
-    // 8s list cache is bypassed for an actually-fresh result.
-    try {
-      await _loadEmails({ force: true });
-    } finally {
-      btn?.classList.remove('email-lib-refreshing');
-      // Flash a checkmark for ~900ms so the user gets a clear "done" cue.
-      if (btn) {
-        const orig = btn.innerHTML;
-        btn.classList.add('email-lib-refresh-done');
-        btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg>';
-        setTimeout(() => {
-          if (btn.classList.contains('email-lib-refresh-done')) {
-            btn.classList.remove('email-lib-refresh-done');
-            btn.innerHTML = orig;
-          }
-        }, 900);
-      }
-    }
+    await _refreshEmailLibraryFromUi(document.getElementById('email-lib-refresh-btn'));
   });
+  _initMobileEmailPullRefresh();
   document.getElementById('email-lib-settings-btn')?.addEventListener('click', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();

@@ -4483,6 +4483,7 @@ function startOdysseusApp() {
 
 	    historyEl.addEventListener('touchstart', (e) => {
 	      if (refreshing || window.innerWidth > 768) return;
+	      if (document.querySelector('.modal:not(.hidden)')) return;
 	      if (historyEl.scrollTop > 0) return;
 	      if (e.target && e.target.closest && e.target.closest('.chat-input-bar, textarea, input, button, select, a')) return;
 	      tracking = true;
