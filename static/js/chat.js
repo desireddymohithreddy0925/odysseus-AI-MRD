@@ -115,9 +115,6 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
     const targetId = activeRowId || hashId || lastSelectedId;
     if (!targetId) return false;
     try {
-      const sessions = sessionModule.getSessions ? (sessionModule.getSessions() || []) : [];
-      const known = sessions.some(s => String(s.id) === String(targetId));
-      if (!known && !hashId) return false;
       window.__odysseusComposerUserEdited = true;
       if (sessionModule.selectSession) {
         await sessionModule.selectSession(targetId, { keepSidebar: true, showLoading: false });
