@@ -3774,7 +3774,11 @@ def setup_email_routes():
             return {"success": False, "error": "Mail operation failed"}
 
     @router.get("/folders")
-    async def list_folders(account_id: str | None = Query(None), owner: str = Depends(require_owner)):
+    async def list_folders(
+        account_id: str | None = Query(None),
+        cached_only: int = Query(0),
+        owner: str = Depends(require_owner),
+    ):
         """List IMAP folders."""
         if _fixture_email_enabled():
             return {"folders": ["INBOX", "Archive", "Sent"], "sync": {"source": "fixture"}}
@@ -3785,6 +3789,18 @@ def setup_email_routes():
             sync_meta["source"] = "folder_cache"
             payload["sync"] = sync_meta
             return payload
+        if cached_only:
+            stale = _folder_cache_get_stale(account_id, owner)
+            if stale:
+                payload = dict(stale)
+                sync_meta = dict(payload.get("sync") or {})
+                sync_meta["source"] = "folder_cache_stale"
+                payload["sync"] = sync_meta
+                return payload
+            return {
+                "folders": ["INBOX", "Sent", "Archive"],
+                "sync": {"source": "folder_cached_only_fallback"},
+            }
 
         def _list_folders_sync():
             with _imap(account_id, owner=owner) as conn:

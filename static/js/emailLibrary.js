@@ -3249,11 +3249,14 @@ function _snapEmailModalToLeftSidebar(modal) {
   return true;
 }
 
-async function _loadFolders({ resetMissing = false } = {}) {
+async function _loadFolders({ resetMissing = false, live = false } = {}) {
   const seq = ++_libFolderSeq;
   const accountAtStart = state._libAccountId || '';
   try {
-    const res = await fetch(emailApiUrl('/api/email/folders', { account_id: accountAtStart || undefined }));
+    const res = await fetch(emailApiUrl('/api/email/folders', {
+      account_id: accountAtStart || undefined,
+      cached_only: live ? undefined : 1,
+    }));
     let data = await res.json();
     if (seq !== _libFolderSeq || accountAtStart !== (state._libAccountId || '')) return;
     const sel = document.getElementById('email-lib-folder');
@@ -4531,6 +4534,7 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
     if (grid2) grid2.classList.remove('email-lib-just-opened');
     paintData(cached, { cacheSource: true });
     paintedExisting = true;
+    if (!force) return;
   } else if (state._libEmails.length && cacheable) {
     _renderGrid();
     _setEmailSyncStatus({ loading: true });
@@ -4565,6 +4569,7 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
             grid.classList.remove('email-lib-just-opened');
             paintData(fastData);
             paintedExisting = true;
+            if (!force) return;
           }
         } catch (_) {
           // Cold index miss/timeout: leave the spinner and continue to IMAP.
