@@ -1573,8 +1573,10 @@ def setup_chat_routes(
                                         last_metrics["context_messages_after_trim"] = ctx.context_messages_after_trim
                                         last_metrics["context_tokens_before_trim"] = ctx.context_tokens_before_trim
                                         last_metrics["context_tokens_after_trim"] = ctx.context_tokens_after_trim
-                                    if ctx.context_length and last_metrics.get("input_tokens"):
-                                        pct = min(round((last_metrics["input_tokens"] / ctx.context_length) * 100, 1), 100.0)
+                                    request_context_tokens = ctx.context_tokens_after_trim or estimate_tokens(messages)
+                                    last_metrics["request_context_tokens"] = request_context_tokens
+                                    if ctx.context_length and request_context_tokens:
+                                        pct = min(round((request_context_tokens / ctx.context_length) * 100, 1), 100.0)
                                         last_metrics["context_percent"] = pct
                                         last_metrics["context_length"] = ctx.context_length
                                     # The frontend reads `tokens_per_second`; the raw usage event
@@ -1607,6 +1609,7 @@ def setup_chat_routes(
                                     "input_tokens": _est_in,
                                     "output_tokens": _est_out,
                                     "tokens_per_second": _tps,
+                                    "request_context_tokens": _est_in,
                                     "context_percent": _ctx_pct,
                                     "context_length": ctx.context_length,
                                     "model": _actual_model or _answered_by or _requested_model,

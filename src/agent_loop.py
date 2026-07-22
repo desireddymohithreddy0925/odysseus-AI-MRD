@@ -2844,6 +2844,7 @@ def _compute_final_metrics(
     round_texts: list,
     model: str = "",
     last_round_input_tokens: int = 0,
+    request_context_tokens: int = 0,
     prep_timings: Optional[Dict[str, float]] = None,
     backend_gen_tps: float = 0,
     backend_prefill_tps: float = 0,
@@ -2868,8 +2869,11 @@ def _compute_final_metrics(
         tps = backend_gen_tps
     else:
         tps = output_tokens / total_duration if total_duration > 0 else 0
-    # Use last round's input tokens for context % (peak usage) when available
-    ctx_tokens = last_round_input_tokens if last_round_input_tokens > 0 else input_tokens
+    # Context % should describe the prompt Odysseus assembled, not provider
+    # billing/usage counters. Some providers report only the final agent round
+    # or cache-adjusted input, which made the displayed context jump from e.g.
+    # 44% to 5% even when the session history had not meaningfully changed.
+    ctx_tokens = request_context_tokens or estimate_tokens(messages)
     ctx_pct = min(round((ctx_tokens / context_length) * 100, 1), 100.0) if context_length else 0
 
     metrics = {
@@ -2882,6 +2886,7 @@ def _compute_final_metrics(
         # tokens/wall-clock fallback (reads low — includes prefill/overhead).
         "tps_source": "backend" if (backend_gen_tps and backend_gen_tps > 0) else "computed",
         "total_tokens": input_tokens + output_tokens,
+        "request_context_tokens": ctx_tokens,
         "context_length": context_length,
         "context_percent": ctx_pct,
         "usage_source": "real" if has_real_usage else "estimated",
@@ -5200,11 +5205,13 @@ async def stream_agent_loop(
 
     # --- Final metrics ---
     total_duration = time.time() - total_start
+    final_context_tokens = estimate_tokens(messages)
     metrics = _compute_final_metrics(
         messages, full_response, total_duration, time_to_first_token,
         context_length, real_input_tokens, real_output_tokens,
         has_real_usage, tool_events, round_texts, model=actual_model,
         last_round_input_tokens=last_round_input_tokens,
+        request_context_tokens=final_context_tokens,
         prep_timings=prep_timings,
         backend_gen_tps=backend_gen_tps,
         backend_prefill_tps=backend_prefill_tps,

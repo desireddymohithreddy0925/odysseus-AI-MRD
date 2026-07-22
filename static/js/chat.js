@@ -59,6 +59,12 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
     return '';
   }
 
+  function _liveSessionModule() {
+    return (window.sessionModule && window.sessionModule.getCurrentSessionId)
+      ? window.sessionModule
+      : sessionModule;
+  }
+
   function _closeContextHeaderPopup() {
     document.querySelectorAll('.chat-context-popup').forEach(el => el.remove());
     const pill = document.getElementById('chat-context-pill');
@@ -129,21 +135,12 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
       compactBtn.textContent = d.should_compact ? 'Compact context' : 'Compact anyway';
       compactBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
-        if (!sid) return;
         compactBtn.disabled = true;
         compactBtn.textContent = 'Compacting...';
-        try {
-          const res = await fetch(`/api/session/${encodeURIComponent(sid)}/compact`, { method: 'POST' });
-          if (!res.ok) throw new Error(await res.text());
-          uiModule.showToast('Context compacted');
-          _closeContextHeaderPopup();
-          if (sessionModule && sessionModule.selectSession) await sessionModule.selectSession(sid, { keepSidebar: true, showLoading: false });
-          refreshChatContextHeader('compact');
-        } catch (err) {
+        const ok = await compactCurrentChatContext();
+        if (!ok) {
           compactBtn.disabled = false;
           compactBtn.textContent = 'Compact failed';
-          uiModule.showError(`Compact failed: ${err.message || err}`);
         }
       });
       popup.appendChild(compactBtn);
@@ -173,12 +170,35 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
     });
   }
 
+  export async function compactCurrentChatContext() {
+    const sm = _liveSessionModule();
+    const sid = sm && sm.getCurrentSessionId && sm.getCurrentSessionId();
+    if (!sid) {
+      uiModule.showToast('Open a chat first');
+      return false;
+    }
+    try {
+      const res = await fetch(`/api/session/${encodeURIComponent(sid)}/compact`, { method: 'POST' });
+      if (!res.ok) throw new Error(await res.text());
+      uiModule.showToast('Context compacted');
+      _closeContextHeaderPopup();
+      if (sm && sm.selectSession) await sm.selectSession(sid, { keepSidebar: true, showLoading: false });
+      refreshChatContextHeader('compact');
+      return true;
+    } catch (err) {
+      uiModule.showError(`Compact failed: ${err.message || err}`);
+      return false;
+    }
+  }
+  try { window.compactCurrentChatContext = compactCurrentChatContext; } catch (_) {}
+
   export async function refreshChatContextHeader(reason = '') {
     _bindContextHeaderPill();
     const pill = document.getElementById('chat-context-pill');
     const label = document.getElementById('chat-context-pill-label');
     if (!pill || !label) return;
-    const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
+    const sm = _liveSessionModule();
+    const sid = sm && sm.getCurrentSessionId && sm.getCurrentSessionId();
     const seq = ++_contextHeaderSeq;
     if (!sid) {
       _contextHeaderData = null;
@@ -193,7 +213,8 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       if (seq !== _contextHeaderSeq) return;
-      if (!sessionModule.getCurrentSessionId || sessionModule.getCurrentSessionId() !== sid) return;
+      const latestSm = _liveSessionModule();
+      if (!latestSm.getCurrentSessionId || latestSm.getCurrentSessionId() !== sid) return;
       _contextHeaderData = data;
       const pct = Number(data.context_percent || 0);
       label.textContent = `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;

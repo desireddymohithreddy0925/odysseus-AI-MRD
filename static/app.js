@@ -488,6 +488,20 @@ function initializeEventListeners() {
     });
   }
 
+  // Export menu: Compact current chat context
+  const exportCompactBtn = el('export-compact-btn');
+  if (exportCompactBtn) {
+    exportCompactBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      exportMenu.classList.remove('open');
+      if (window.compactCurrentChatContext) {
+        await window.compactCurrentChatContext();
+      } else {
+        uiModule.showError('Compact action is not ready yet');
+      }
+    });
+  }
+
   // Export: PDF
   const exportPdfBtn = el('export-pdf-btn');
   if (exportPdfBtn) {
