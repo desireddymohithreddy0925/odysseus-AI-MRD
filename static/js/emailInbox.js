@@ -5,7 +5,7 @@
 
 import spinnerModule from './spinner.js';
 import sessionModule from './sessions.js';
-import { initEmailLibrary, openEmailLibrary, closeEmailLibrary, isOpen as isLibOpen, prewarmEmailLibrary, prewarmUnreadEmails } from './emailLibrary.js?v=20260721emailreplyfast1';
+import { initEmailLibrary, openEmailLibrary, closeEmailLibrary, isOpen as isLibOpen, prewarmEmailLibrary, prewarmUnreadEmails } from './emailLibrary.js?v=20260722emailfastindex1';
 import * as Modals from './modalManager.js';
 import { applyEdgeDock } from './modalSnap.js';
 import { buildReplyAllCc, extractEmail } from './emailLibrary/replyRecipients.js';
@@ -399,22 +399,29 @@ export async function loadEmails(append = false) {
 
   try {
     const fromQS = _senderFilter ? `&from=${encodeURIComponent(_senderFilter)}` : '';
+    const applyListData = (data) => {
+      if (!append) _emails = [];
+      _emails.push(...(data.emails || []));
+      _total = data.total || 0;
+      if (_listSpinner) { _listSpinner.destroy(); _listSpinner = null; }
+      _renderList();
+      const unreadCount = _emails.filter(e => !e.is_read).length;
+      const dot = document.getElementById('email-unread-dot');
+      if (dot) dot.style.display = unreadCount > 0 ? '' : 'none';
+    };
+    if (!append && !_senderFilter) {
+      try {
+        const cachedRes = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(_currentFolder)}&limit=50&offset=${_offset}&cached_only=1${_acct()}`);
+        const cachedData = await cachedRes.json();
+        if (!cachedData.error && (cachedData.emails || []).length) {
+          applyListData(cachedData);
+        }
+      } catch (_) {}
+    }
     const res = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(_currentFolder)}&limit=50&offset=${_offset}${fromQS}${_acct()}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-
-    if (!append) _emails = [];
-    _emails.push(...(data.emails || []));
-    _total = data.total || 0;
-
-    // Remove spinner
-    if (_listSpinner) { _listSpinner.destroy(); _listSpinner = null; }
-
-    _renderList();
-
-    const unreadCount = _emails.filter(e => !e.is_read).length;
-    const dot = document.getElementById('email-unread-dot');
-    if (dot) dot.style.display = unreadCount > 0 ? '' : 'none';
+    applyListData(data);
   } catch (e) {
     console.error('Failed to load emails:', e);
     if (_listSpinner) { _listSpinner.destroy(); _listSpinner = null; }

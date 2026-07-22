@@ -1457,7 +1457,7 @@ def setup_email_routes():
     _IMAP_POOL = {}   # account_id → (conn, last_used_at)
     _IMAP_IDLE_MAX = 60.0
     _WARMING_READS = set()
-    _WARM_READ_LIMIT = 2
+    _WARM_READ_LIMIT = 6
     _WARM_MAX_BYTES = 192 * 1024
     _WARM_RECENT_SECONDS = 7 * 24 * 60 * 60
     _pool_lock = _threading.Lock()
@@ -3115,7 +3115,7 @@ def setup_email_routes():
             return
 
         async def _warm():
-            await _asyncio.sleep(3.0)
+            await _asyncio.sleep(0.25)
             for uid, ck in selected:
                 if _read_cache_get(ck) is not None:
                     _WARMING_READS.discard(ck)

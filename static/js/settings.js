@@ -2820,7 +2820,7 @@ async function initEmailAccountsSettings() {
 
   el('set-email-open-library-settings')?.addEventListener('click', async () => {
     try {
-      const mod = await import('./emailLibrary.js?v=20260721emailreplyfast1');
+      const mod = await import('./emailLibrary.js?v=20260722emailfastindex1');
       if (typeof mod.openEmailLibrarySettings === 'function') {
         await mod.openEmailLibrarySettings();
       }
