@@ -37,6 +37,7 @@ export function initSidebarLayout(Storage, opts) {
   const SIDEBAR_MODE_KEY = 'odysseus-sidebar-mode';
 
   function _setSidebarModeClasses(mode) {
+    document.documentElement.classList.remove('ody-mobile-startup-sidebar-hidden');
     document.documentElement.classList.toggle('ody-sidebar-mini', mode === 'mini');
     document.documentElement.classList.toggle('ody-sidebar-off', mode === 'off');
   }

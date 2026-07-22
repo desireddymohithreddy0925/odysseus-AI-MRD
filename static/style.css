@@ -4513,6 +4513,20 @@ body.bg-pattern-sparkles {
         left: auto; right: 0;
         box-shadow: -4px 0 20px rgba(0,0,0,0.5);
       }
+      html.ody-sidebar-off .sidebar,
+      html.ody-mobile-startup-sidebar-hidden .sidebar {
+        transform: translateX(-100%) !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+      }
+      html.ody-sidebar-off .sidebar.right-side,
+      html.ody-mobile-startup-sidebar-hidden .sidebar.right-side {
+        transform: translateX(100%) !important;
+      }
+      html.ody-sidebar-off .icon-rail,
+      html.ody-mobile-startup-sidebar-hidden .icon-rail {
+        display: none !important;
+      }
       /* Backdrop behind sidebar */
       #sidebar-backdrop {
         position: fixed;
