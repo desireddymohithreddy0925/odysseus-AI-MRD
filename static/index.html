@@ -93,7 +93,7 @@
       // Restore the sidebar mode before first paint. Otherwise the icon rail
       // and full sidebar can both flash visible until sidebar-layout.js runs.
       try {
-        var _mobileStartup = window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
+        var _mobileStartup = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
         if (_mobileStartup) {
           document.documentElement.classList.add('ody-sidebar-off', 'ody-mobile-startup-sidebar-hidden');
         } else {
@@ -213,6 +213,22 @@
     @font-face { font-family: 'Inter'; font-weight: 400; font-style: normal; font-display: swap; src: url('/static/fonts/Inter-Regular.woff2') format('woff2'); }
     @font-face { font-family: 'Inter'; font-weight: 500; font-style: normal; font-display: swap; src: url('/static/fonts/Inter-Medium.woff2') format('woff2'); }
     @font-face { font-family: 'Inter'; font-weight: 600; font-style: normal; font-display: swap; src: url('/static/fonts/Inter-SemiBold.woff2') format('woff2'); }
+    @media (max-width: 768px) {
+      html.ody-sidebar-off .sidebar,
+      html.ody-mobile-startup-sidebar-hidden .sidebar {
+        transform: translateX(-100%) !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+      }
+      html.ody-sidebar-off .sidebar.right-side,
+      html.ody-mobile-startup-sidebar-hidden .sidebar.right-side {
+        transform: translateX(100%) !important;
+      }
+      html.ody-sidebar-off .icon-rail,
+      html.ody-mobile-startup-sidebar-hidden .icon-rail {
+        display: none !important;
+      }
+    }
   </style>
   <!-- KaTeX CSS is loaded with media="print" so it doesn't block render,
        then flipped to "all" via JS after load. Mermaid init runs once the
