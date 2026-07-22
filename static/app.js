@@ -4463,9 +4463,17 @@ function startOdysseusApp() {
 	    }
 
 	    async function runRefresh() {
-	      if (refreshing || _isForegroundChatBusy()) return;
+	      if (refreshing) return;
+	      if (_isForegroundChatBusy()) {
+	        setPull(0, false);
+	        return;
+	      }
 	      refreshing = true;
 	      setPull(THRESHOLD, true);
+	      const safetyTimer = setTimeout(() => {
+	        refreshing = false;
+	        setPull(0, false);
+	      }, 8000);
 	      try {
 	        const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
 	        if (sid && sessionModule.selectSession) {
@@ -4476,6 +4484,7 @@ function startOdysseusApp() {
 	      } catch (err) {
 	        console.warn('pull refresh failed:', err);
 	      } finally {
+	        clearTimeout(safetyTimer);
 	        refreshing = false;
 	        setPull(0, false);
 	      }
