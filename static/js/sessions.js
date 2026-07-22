@@ -3,9 +3,9 @@
 
 import Storage from './storage.js';
 import uiModule, { autoResize, styledPrompt } from './ui.js';
-import chatRenderer from './chatRenderer.js?v=20260722emailfastindex1';
+import chatRenderer from './chatRenderer.js?v=20260722ctxheader1';
 import { providerLogo } from './providers.js';
-import { initModelPicker, updateModelPicker } from './modelPicker.js?v=20260722defaultpending1';
+import { initModelPicker, updateModelPicker } from './modelPicker.js?v=20260722ctxheader1';
 import themeModule from './theme.js';
 import spinnerModule from './spinner.js';
 
@@ -1869,6 +1869,7 @@ export async function selectSession(id, { keepSidebar = false, showLoading = tru
     }
     // Update model picker visibility
     updateModelPicker();
+    if (window.refreshChatContextHeader) window.refreshChatContextHeader('select-session');
 
     // Refresh session cost badge for the newly selected session
     if (chatRenderer.updateSessionCostUI) chatRenderer.updateSessionCostUI();
@@ -2180,6 +2181,7 @@ export function createDirectChat(url, modelId, endpointId, opts = {}) {
 
   // Update model picker to show the pending model
   updateModelPicker();
+  if (window.refreshChatContextHeader) window.refreshChatContextHeader('new-chat');
 
   // Update current-meta header
   const metaEl = document.getElementById('current-meta');
@@ -2268,6 +2270,7 @@ export async function materializePendingSession() {
     // prompt in a new/pending chat behind startup fetches and slow /api/sessions
     // calls, so the user's message could sit for 20s+ before streaming began.
     _suppressNextSessionLoading = true;
+    if (window.refreshChatContextHeader) window.refreshChatContextHeader('materialize-session');
     loadSessions().catch(() => {});
     return true;
   })();

@@ -723,6 +723,7 @@ async function _pick(m) {
     }
     // Update picker visibility — model is now set
     updateModelPicker();
+    if (window.refreshChatContextHeader) window.refreshChatContextHeader('model-pick');
     uiModule.showToast(`Using ${m.display}`);
     finishSwitch();
   }

@@ -656,6 +656,54 @@ def setup_history_routes(session_manager, upload_handler=None) -> APIRouter:
         except Exception as e:
             raise HTTPException(500, f"Topic analysis failed: {e}")
 
+    @router.get("/api/session/{session_id}/context")
+    async def get_session_context_usage(request: Request, session_id: str) -> Dict[str, Any]:
+        """Return an estimated whole-chat context usage for the session's model.
+
+        Streaming footers report the prompt size for the last request. This
+        endpoint estimates the persisted session context so the header can show
+        when the whole chat is approaching compaction.
+        """
+        _verify_session_owner(request, session_id)
+        try:
+            session = session_manager.get_session(session_id)
+        except KeyError:
+            raise HTTPException(404, "Session not found")
+
+        try:
+            from src.model_context import estimate_tokens, get_context_length
+
+            messages = session.get_context_messages()
+            used = int(estimate_tokens(messages))
+            ctx_len = int(get_context_length(session.endpoint_url, session.model) or 0)
+            pct = round((used / ctx_len) * 100, 1) if ctx_len else 0.0
+            pct = max(0.0, min(100.0, pct))
+            visible_messages = sum(
+                1 for m in session.history
+                if not (getattr(m, "metadata", None) or {}).get("hidden")
+            )
+            compacted_messages = sum(
+                1 for m in session.history
+                if (getattr(m, "metadata", None) or {}).get("compacted")
+            )
+            return {
+                "session_id": session_id,
+                "model": session.model,
+                "endpoint_url": session.endpoint_url,
+                "used_tokens": used,
+                "context_length": ctx_len,
+                "context_percent": pct,
+                "messages": visible_messages,
+                "context_messages": len(messages),
+                "compacted_messages": compacted_messages,
+                "can_compact": visible_messages >= 6,
+                "should_compact": pct >= 70,
+                "auto_compact_threshold": 85,
+            }
+        except Exception as e:
+            logger.error(f"Context usage error {session_id}: {e}")
+            raise HTTPException(500, str(e))
+
     @router.post("/api/session/{session_id}/compact")
     async def compact_session(request: Request, session_id: str):
         """Manually trigger context compaction for a session."""

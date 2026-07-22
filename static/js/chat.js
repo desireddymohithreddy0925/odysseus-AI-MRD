@@ -43,6 +43,179 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
   let _sendInFlight = false;   // covers the window from click → streaming start
   let _displayOverride = null; // Override visible user bubble text (hides injected prompts)
   let _hideUserBubble = false; // Skip user bubble entirely (e.g. continue after stop)
+  let _contextHeaderSeq = 0;
+  let _contextHeaderData = null;
+  let _contextHeaderBound = false;
+
+  function _fmtContextNumber(n) {
+    const v = Number(n || 0);
+    return v ? v.toLocaleString() : '?';
+  }
+
+  function _contextColorClass(pct) {
+    const n = Number(pct || 0);
+    if (n >= 85) return 'danger';
+    if (n >= 70) return 'warn';
+    return '';
+  }
+
+  function _closeContextHeaderPopup() {
+    document.querySelectorAll('.chat-context-popup').forEach(el => el.remove());
+    const pill = document.getElementById('chat-context-pill');
+    if (pill) pill.classList.remove('open');
+  }
+
+  function _positionContextHeaderPopup(popup, pill) {
+    const rect = pill.getBoundingClientRect();
+    popup.style.top = `${Math.round(rect.bottom + 8)}px`;
+    popup.style.left = `${Math.round(rect.left + (rect.width / 2) - 119)}px`;
+    document.body.appendChild(popup);
+    const pRect = popup.getBoundingClientRect();
+    if (pRect.left < 8) popup.style.left = '8px';
+    if (pRect.right > window.innerWidth - 8) popup.style.left = `${Math.max(8, window.innerWidth - pRect.width - 8)}px`;
+    if (pRect.bottom > window.innerHeight - 8) popup.style.top = `${Math.max(8, rect.top - pRect.height - 8)}px`;
+  }
+
+  function _showContextHeaderPopup() {
+    const pill = document.getElementById('chat-context-pill');
+    if (!pill || pill.hidden || !_contextHeaderData) return;
+    const wasOpen = pill.classList.contains('open');
+    _closeContextHeaderPopup();
+    if (wasOpen) return;
+
+    const d = _contextHeaderData;
+    const pct = Number(d.context_percent || 0);
+    const colorClass = _contextColorClass(pct);
+    const modelShort = String(d.model || 'Unknown').split('/').pop();
+    const popup = document.createElement('div');
+    popup.className = `chat-context-popup ${colorClass}`.trim();
+
+    const title = document.createElement('div');
+    title.className = 'chat-context-popup-title';
+    title.textContent = 'Chat Context';
+    popup.appendChild(title);
+
+    const bar = document.createElement('div');
+    bar.className = 'chat-context-popup-bar';
+    const fill = document.createElement('div');
+    fill.className = 'chat-context-popup-fill';
+    fill.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+    bar.appendChild(fill);
+    popup.appendChild(bar);
+
+    const rows = [
+      ['Used', `${_fmtContextNumber(d.used_tokens)} / ${_fmtContextNumber(d.context_length)}`],
+      ['Usage', `${pct}%`],
+      ['Model', modelShort],
+      ['Messages', `${Number(d.messages || 0).toLocaleString()}`],
+      ['Auto compact', `${Number(d.auto_compact_threshold || 85)}%`],
+    ];
+    rows.forEach(([label, value]) => {
+      const row = document.createElement('div');
+      row.className = 'chat-context-popup-row';
+      const a = document.createElement('span');
+      a.textContent = label;
+      const b = document.createElement('span');
+      b.textContent = value;
+      row.appendChild(a);
+      row.appendChild(b);
+      popup.appendChild(row);
+    });
+
+    if (d.can_compact) {
+      const compactBtn = document.createElement('button');
+      compactBtn.type = 'button';
+      compactBtn.className = 'chat-context-compact-btn';
+      compactBtn.textContent = d.should_compact ? 'Compact context' : 'Compact anyway';
+      compactBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
+        if (!sid) return;
+        compactBtn.disabled = true;
+        compactBtn.textContent = 'Compacting...';
+        try {
+          const res = await fetch(`/api/session/${encodeURIComponent(sid)}/compact`, { method: 'POST' });
+          if (!res.ok) throw new Error(await res.text());
+          uiModule.showToast('Context compacted');
+          _closeContextHeaderPopup();
+          if (sessionModule && sessionModule.selectSession) await sessionModule.selectSession(sid, { keepSidebar: true, showLoading: false });
+          refreshChatContextHeader('compact');
+        } catch (err) {
+          compactBtn.disabled = false;
+          compactBtn.textContent = 'Compact failed';
+          uiModule.showError(`Compact failed: ${err.message || err}`);
+        }
+      });
+      popup.appendChild(compactBtn);
+    }
+
+    pill.classList.add('open');
+    _positionContextHeaderPopup(popup, pill);
+    setTimeout(() => {
+      const close = (ev) => {
+        if (popup.contains(ev.target) || pill.contains(ev.target)) return;
+        document.removeEventListener('pointerdown', close, true);
+        _closeContextHeaderPopup();
+      };
+      document.addEventListener('pointerdown', close, true);
+    }, 0);
+  }
+
+  function _bindContextHeaderPill() {
+    if (_contextHeaderBound) return;
+    _contextHeaderBound = true;
+    const pill = document.getElementById('chat-context-pill');
+    if (!pill) return;
+    pill.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      _showContextHeaderPopup();
+    });
+  }
+
+  export async function refreshChatContextHeader(reason = '') {
+    _bindContextHeaderPill();
+    const pill = document.getElementById('chat-context-pill');
+    const label = document.getElementById('chat-context-pill-label');
+    if (!pill || !label) return;
+    const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
+    const seq = ++_contextHeaderSeq;
+    if (!sid) {
+      _contextHeaderData = null;
+      pill.hidden = true;
+      _closeContextHeaderPopup();
+      return;
+    }
+    pill.hidden = false;
+    pill.classList.add('loading');
+    try {
+      const res = await fetch(`/api/session/${encodeURIComponent(sid)}/context`, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (seq !== _contextHeaderSeq) return;
+      if (!sessionModule.getCurrentSessionId || sessionModule.getCurrentSessionId() !== sid) return;
+      _contextHeaderData = data;
+      const pct = Number(data.context_percent || 0);
+      label.textContent = `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
+      pill.title = `${_fmtContextNumber(data.used_tokens)} / ${_fmtContextNumber(data.context_length)} tokens · ${String(data.model || '').split('/').pop()}`;
+      pill.classList.remove('warn', 'danger');
+      const colorClass = _contextColorClass(pct);
+      if (colorClass) pill.classList.add(colorClass);
+      pill.classList.remove('loading');
+      if (pill.classList.contains('open')) {
+        _closeContextHeaderPopup();
+        _showContextHeaderPopup();
+      }
+    } catch (err) {
+      if (seq !== _contextHeaderSeq) return;
+      _contextHeaderData = null;
+      pill.hidden = true;
+      pill.classList.remove('loading', 'warn', 'danger');
+      _closeContextHeaderPopup();
+      console.warn('context header refresh failed:', reason, err);
+    }
+  }
+  try { window.refreshChatContextHeader = refreshChatContextHeader; } catch (_) {}
 
   function _setForegroundChatBusy(active) {
     try {
@@ -2722,6 +2895,7 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
                 if (metrics) {
                   const metricsTarget = _metricsTargetForTurn();
                   if (metricsTarget) displayMetrics(metricsTarget, metrics);
+                  refreshChatContextHeader('metrics');
                 }
 
               } else if (json.type === 'message_saved') {
