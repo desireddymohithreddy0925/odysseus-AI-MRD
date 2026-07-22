@@ -221,6 +221,7 @@ def setup_session_routes(
     @router.get("/sessions")
     def list_sessions(request: Request):
         user = effective_user(request)
+        active_incognito_id = str(request.query_params.get("active_incognito_id") or "").strip()
         # Lazy purge: incognito sessions are ephemeral by design — wipe leftovers
         # from the DB and session_manager so they vanish on the next page refresh.
         # BUT: skip sessions that were created within the last 10 minutes.
@@ -241,6 +242,8 @@ def setup_session_routes(
                     DbSession.created_at < _cutoff,
                 ).all()
                 for _g in _ghosts:
+                    if active_incognito_id and _g.id == active_incognito_id:
+                        continue
                     _purge_db.query(_DbMsg).filter(_DbMsg.session_id == _g.id).delete()
                     _purge_db.delete(_g)
                     if hasattr(session_manager, "delete_session"):

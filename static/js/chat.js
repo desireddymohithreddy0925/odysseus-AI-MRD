@@ -59,6 +59,46 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
     return '';
   }
 
+  function _contextRingColor(pct) {
+    const n = Number(pct || 0);
+    if (n >= 85) return 'var(--red, #e06c75)';
+    if (n >= 70) return '#ff9900';
+    return 'var(--green, #98c379)';
+  }
+
+  function _contextRingMarkup(pct, { includeLabel = true, labelId = '' } = {}) {
+    const value = Math.max(0, Math.min(100, Number(pct || 0)));
+    const r = 6;
+    const stroke = 1.5;
+    const circ = 2 * Math.PI * r;
+    const fill = circ * (value / 100);
+    const label = value.toFixed(value >= 10 ? 0 : 1);
+    const idAttr = labelId ? ` id="${labelId}"` : '';
+    return `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        <circle cx="7" cy="7" r="${r}" fill="none" stroke="var(--border, #333)" stroke-width="${stroke}" opacity="0.3"/>
+        <circle cx="7" cy="7" r="${r}" fill="none" stroke="var(--ctx-stroke)" stroke-width="${stroke}"
+          stroke-dasharray="${fill} ${circ - fill}" stroke-dashoffset="${circ * 0.25}"
+          stroke-linecap="round" transform="rotate(-90 7 7)"/>
+      </svg>${includeLabel ? `<span class="ctx-ring-pct"${idAttr}>${label}%</span>` : ''}`;
+  }
+
+  function _renderContextHeaderRing(pill, pct) {
+    const value = Math.max(0, Math.min(100, Number(pct || 0)));
+    pill.style.setProperty('--ctx-color', _contextRingColor(value));
+    pill.innerHTML = _contextRingMarkup(value, { includeLabel: true, labelId: 'chat-context-pill-label' });
+  }
+
+  function _renderCompactMenuContextIcon(pct) {
+    const icon = document.querySelector('#export-compact-btn .dropdown-icon');
+    if (!icon) return;
+    const value = Math.max(0, Math.min(100, Number(pct || 0)));
+    const row = document.getElementById('export-compact-btn');
+    const color = _contextRingColor(value);
+    if (row) row.style.setProperty('--ctx-color', color);
+    icon.style.setProperty('--ctx-color', color);
+    icon.innerHTML = _contextRingMarkup(value, { includeLabel: false });
+  }
+
   function _liveSessionModule() {
     return (window.sessionModule && window.sessionModule.getCurrentSessionId)
       ? window.sessionModule
@@ -112,7 +152,7 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
     const rows = [
       ['Used', `${_fmtContextNumber(d.used_tokens)} / ${_fmtContextNumber(d.context_length)}`],
       ['Usage', `${pct}%`],
-      ['Model', modelShort],
+      ['Window model', modelShort],
       ['Messages', `${Number(d.messages || 0).toLocaleString()}`],
       ['Auto compact', `${Number(d.auto_compact_threshold || 85)}%`],
     ];
@@ -132,11 +172,17 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
       const compactBtn = document.createElement('button');
       compactBtn.type = 'button';
       compactBtn.className = 'chat-context-compact-btn';
-      compactBtn.textContent = d.should_compact ? 'Compact context' : 'Compact anyway';
+      compactBtn.textContent = 'Compact';
       compactBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         compactBtn.disabled = true;
-        compactBtn.textContent = 'Compacting...';
+        compactBtn.replaceChildren();
+        try {
+          const wp = spinnerModule.createWhirlpool(13);
+          wp.element.style.margin = '0 5px 0 0';
+          compactBtn.appendChild(wp.element);
+        } catch (_) {}
+        compactBtn.appendChild(document.createTextNode('Compacting'));
         const ok = await compactCurrentChatContext();
         if (!ok) {
           compactBtn.disabled = false;
@@ -195,8 +241,7 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
   export async function refreshChatContextHeader(reason = '') {
     _bindContextHeaderPill();
     const pill = document.getElementById('chat-context-pill');
-    const label = document.getElementById('chat-context-pill-label');
-    if (!pill || !label) return;
+    if (!pill) return;
     const sm = _liveSessionModule();
     const sid = sm && sm.getCurrentSessionId && sm.getCurrentSessionId();
     const seq = ++_contextHeaderSeq;
@@ -217,7 +262,8 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
       if (!latestSm.getCurrentSessionId || latestSm.getCurrentSessionId() !== sid) return;
       _contextHeaderData = data;
       const pct = Number(data.context_percent || 0);
-      label.textContent = `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
+      _renderContextHeaderRing(pill, pct);
+      _renderCompactMenuContextIcon(pct);
       pill.title = `${_fmtContextNumber(data.used_tokens)} / ${_fmtContextNumber(data.context_length)} tokens · ${String(data.model || '').split('/').pop()}`;
       pill.classList.remove('warn', 'danger');
       const colorClass = _contextColorClass(pct);
@@ -1152,11 +1198,6 @@ import { wireArrowUpRecall, getUserMessagesFromChatHistory } from './composerArr
 
     const incognitoChkForSend = el('incognito-toggle');
     const isIncognitoForSend = !!(incognitoChkForSend && incognitoChkForSend.checked);
-
-    const isCurrentIncognitoSession = !!(sessionModule.isCurrentSessionIncognito && sessionModule.isCurrentSessionIncognito());
-    if (isIncognitoForSend && !isCurrentIncognitoSession && sessionModule.setCurrentSessionId) {
-      sessionModule.setCurrentSessionId(null);
-    }
 
     if (!isIncognitoForSend) {
       await _adoptOpenedSessionBeforeAutoCreate();

@@ -686,6 +686,7 @@ def setup_history_routes(session_manager, upload_handler=None) -> APIRouter:
                 1 for m in session.history
                 if (getattr(m, "metadata", None) or {}).get("compacted")
             )
+            can_compact = used > 0
             return {
                 "session_id": session_id,
                 "model": session.model,
@@ -696,7 +697,7 @@ def setup_history_routes(session_manager, upload_handler=None) -> APIRouter:
                 "messages": visible_messages,
                 "context_messages": len(messages),
                 "compacted_messages": compacted_messages,
-                "can_compact": visible_messages >= 6,
+                "can_compact": can_compact,
                 "should_compact": pct >= 70,
                 "auto_compact_threshold": 85,
             }
@@ -748,7 +749,7 @@ def setup_history_routes(session_manager, upload_handler=None) -> APIRouter:
             compact_model = util_model or session.model
             compact_headers = util_headers if util_url else session.headers
 
-            from src.context_compactor import SELF_SUMMARY_SYSTEM_PROMPT
+            from src.context_compactor import SELF_SUMMARY_SYSTEM_PROMPT, normalize_compaction_summary
             compaction_count = sum(1 for m in session.history if isinstance(m, ChatMessage) and "[Conversation summary" in (m.content or ""))
             sys_prompt = SELF_SUMMARY_SYSTEM_PROMPT.replace("{count}", str(len(older))).replace("{n}", str(compaction_count + 1))
             summary = await llm_call_async(
@@ -760,6 +761,7 @@ def setup_history_routes(session_manager, upload_handler=None) -> APIRouter:
                 temperature=0.2, max_tokens=1024,
                 headers=compact_headers, timeout=30,
             )
+            summary = normalize_compaction_summary(summary)
 
             # Replace session history: summary as system message + recent messages
             # System message holds the full summary for AI context

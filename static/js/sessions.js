@@ -27,6 +27,7 @@ const FOLDER_MAX_VISIBLE = 5;
 let _showAllSessions = false;
 let _expandedFolders = {};  // folderName -> true if "show more" clicked
 let _sortMode = Storage.get('odysseus-session-sort') || 'active'; // default to last active
+const DATE_SECTION_COLLAPSE_KEY = 'ody-session-date-section-collapsed';
 let _autoCreateInProgress = false; // guard against recursive auto-create
 const _INCOGNITO_SESSIONS_KEY = 'ody-incognito-sessions'; // sessionStorage key for incognito session IDs
 const _isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -990,21 +991,68 @@ function _sessionBucketDate(s) {
   return s.last_message_at || s.updated_at || s.created_at || '';
 }
 
+function _loadDateSectionCollapseState() {
+  const raw = Storage.getJSON(DATE_SECTION_COLLAPSE_KEY, {});
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return raw;
+}
+
+function _saveDateSectionCollapseState(state) {
+  Storage.setJSON(DATE_SECTION_COLLAPSE_KEY, state && typeof state === 'object' ? state : {});
+}
+
+function _dateSectionKey(kind, label) {
+  return `${kind || 'session'}:${label || 'Older'}`;
+}
+
+function _isDateSectionCollapsed(kind, label) {
+  return _loadDateSectionCollapseState()[_dateSectionKey(kind, label)] === true;
+}
+
+function _toggleDateSection(kind, label) {
+  const state = _loadDateSectionCollapseState();
+  const key = _dateSectionKey(kind, label);
+  state[key] = state[key] !== true;
+  _saveDateSectionCollapseState(state);
+  renderSessionList();
+}
+
 function _createDateSectionHeader(label, kind = 'session') {
   const el = document.createElement('div');
   el.className = `date-section-header ${kind}-date-section-header`;
   el.textContent = label;
+  const collapsed = _isDateSectionCollapsed(kind, label);
+  if (collapsed) el.classList.add('collapsed');
+  el.dataset.dateSectionKind = kind;
+  el.dataset.dateSectionLabel = label;
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  el.title = collapsed ? `Show ${label}` : `Hide ${label}`;
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _toggleDateSection(kind, label);
+  });
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    e.stopPropagation();
+    _toggleDateSection(kind, label);
+  });
   return el;
 }
 
 function _appendSessionItemsWithDateHeaders(frag, items) {
   let lastLabel = null;
+  let collapsed = false;
   for (const s of items) {
     const label = _dateBucketLabel(_sessionBucketDate(s));
     if (label !== lastLabel) {
       frag.appendChild(_createDateSectionHeader(label, 'session'));
+      collapsed = _isDateSectionCollapsed('session', label);
       lastLabel = label;
     }
+    if (collapsed) continue;
     frag.appendChild(createSessionItem(s));
   }
 }
@@ -1012,6 +1060,7 @@ function _appendSessionItemsWithDateHeaders(frag, items) {
 function _appendFavoriteSessionItems(frag, items) {
   if (!items.length) return;
   frag.appendChild(_createDateSectionHeader('Favorites', 'session'));
+  if (_isDateSectionCollapsed('session', 'Favorites')) return;
   for (const s of items) {
     frag.appendChild(createSessionItem(s));
   }
@@ -1243,9 +1292,7 @@ function _renderSessionListImpl() {
         visibleFolder.push(folderSessions[activeInFolder]);
       }
 
-      visibleFolder.forEach(s => {
-        content.appendChild(createSessionItem(s));
-      });
+      _appendSessionItemsWithDateHeaders(content, visibleFolder);
 
       if (folderSessions.length > FOLDER_MAX_VISIBLE) {
         const rem = folderSessions.length - FOLDER_MAX_VISIBLE;
@@ -1345,9 +1392,7 @@ function _renderSessionListImpl() {
   }
 
   if (unfiledTarget) {
-    visibleUnfiled.forEach(s => {
-      unfiledTarget.appendChild(createSessionItem(s));
-    });
+    _appendSessionItemsWithDateHeaders(unfiledTarget, visibleUnfiled);
   }
 
   // "Show more" / "Show less" toggle
@@ -1633,7 +1678,11 @@ export async function loadSessions() {
       sessionStorage.removeItem('ody-prefetch-sessions');
       fetched = JSON.parse(prefetched);
     } else {
-      const res = await fetch(`${API_BASE}/api/sessions`);
+      let url = `${API_BASE}/api/sessions`;
+      if (currentSessionId && _isIncognitoSession(currentSessionId)) {
+        url += `?active_incognito_id=${encodeURIComponent(currentSessionId)}`;
+      }
+      const res = await fetch(url);
       fetched = await res.json();
     }
     sessions = _normalizeSessionsList(fetched);

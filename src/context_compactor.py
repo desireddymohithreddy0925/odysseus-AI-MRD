@@ -70,6 +70,14 @@ What is the system/code/task state right now? What was the last thing discussed?
 Keep the summary under 1000 tokens. Be dense — every token should carry information. Do not include pleasantries or meta-commentary."""
 
 
+def normalize_compaction_summary(summary: str) -> str:
+    """Remove redundant leading title text before adding our wrapper."""
+    text = (summary or "").strip()
+    text = re.sub(r"^(?:#{1,3}\s*)?Conversation Summary\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^\*\*Conversation Summary\*\*\s*", "", text, flags=re.IGNORECASE)
+    return text.lstrip()
+
+
 def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
     """Drop orphaned `tool` messages and dangling assistant `tool_calls`.
 
@@ -393,6 +401,7 @@ async def maybe_compact(
         # silently dropping the older half. was_compacted=False signals the
         # caller nothing was summarized; trim_for_context handles length.
         return messages, context_length, False
+    summary = normalize_compaction_summary(summary)
 
     summary_msg = {
         "role": "system",
@@ -439,6 +448,7 @@ def _update_session_history(session, split_point: int, summary: str,
     # messages so the system prompt survives compaction.
     system_prefix = list(session.history[:system_msg_count])
     recent_history = session.history[effective_split:]
+    summary = normalize_compaction_summary(summary)
     summary_msg = ChatMessage(
         role="system",
         content=f"[Conversation summary]\n{summary}",
