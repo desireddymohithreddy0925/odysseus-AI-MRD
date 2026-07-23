@@ -417,17 +417,8 @@ HF_MLX_IMAGE_COLLECTIONS = [
     "mlx-community/boogu-image-01-mlx",
 ]
 
-HF_MLX_IMAGE_REPO_SEEDS = [
-    "mlx-community/Qwen-Image-2512-8bit",
-    "mlx-community/HiDream-O1-Image-Dev-mlx-bf16",
-    "mlx-community/FLUX.2-klein-9B",
-]
-
-HF_IMAGE_REPO_SEEDS = [
-    "Tongyi-MAI/Z-Image-Turbo",
-    "Qwen/Qwen-Image-Edit-2511",
-    "krea/Krea-2-Turbo",
-]
+HF_MLX_IMAGE_REPO_SEEDS: list[str] = []
+HF_IMAGE_REPO_SEEDS: list[str] = []
 
 _HF_COLLECTION_CACHE = {"ts": 0.0, "models": []}
 _HF_COLLECTION_TTL = 30 * 60
@@ -600,14 +591,6 @@ def _fetch_hf_image_collection_models() -> list[dict[str, Any]]:
                 model = _collection_item_to_model(item, title, mlx_only=mlx_only)
                 if model:
                     models.append(model)
-    for repo_id in HF_IMAGE_REPO_SEEDS:
-        seed = _collection_item_to_model({"id": repo_id}, "Pinned image models")
-        if seed:
-            models.append(seed)
-    for repo_id in HF_MLX_IMAGE_REPO_SEEDS:
-        seed = _collection_item_to_model({"id": repo_id}, "Pinned Apple image models", mlx_only=True)
-        if seed:
-            models.append(seed)
     _HF_COLLECTION_CACHE["ts"] = now
     _HF_COLLECTION_CACHE["models"] = models
     return list(models)

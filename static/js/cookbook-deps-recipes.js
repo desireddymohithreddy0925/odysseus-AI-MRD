@@ -60,7 +60,7 @@ const _RECIPES = [
   },
   {
     backend: 'mflux',
-    label: 'MLX image models (Qwen / Flux)',
+    label: 'mflux-compatible MLX image models',
     match: () => true,
     variants: {
       pip:    { commands: ['python -m pip install -U mflux fastapi uvicorn python-multipart'] },
@@ -126,7 +126,7 @@ const _RECIPES = [
   },
   {
     backend: 'krea_diffusers',
-    label: 'Krea image models',
+    label: 'Latest Diffusers from Git',
     match: () => true,
     variants: {
       pip:    { commands: ['python -m pip install -U git+https://github.com/huggingface/diffusers.git torchvision accelerate scipy python-multipart'] },

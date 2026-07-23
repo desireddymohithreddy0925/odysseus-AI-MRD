@@ -88,25 +88,23 @@ def test_apple_image_mode_hides_non_mlx_models(monkeypatch):
     assert any(m["id"] == "Qwen/Qwen-Image" for m in cuda)
 
 
-def test_top_apple_image_seeds_show_on_metal(monkeypatch):
-    _disable_hf_discovery(monkeypatch)
-
-    seeds = [
-        image_models._collection_item_to_model({"id": repo}, "Pinned Apple image models", mlx_only=True)
-        for repo in image_models.HF_MLX_IMAGE_REPO_SEEDS
-    ]
-    monkeypatch.setattr(image_models, "_fetch_hf_image_collection_models", lambda: [s for s in seeds if s])
+def test_mlx_collection_imports_show_on_metal_not_cuda(monkeypatch):
+    mlx_model = image_models._collection_item_to_model(
+        {"id": "mlx-community/example-image-model-4bit"},
+        "Example Apple image collection",
+        mlx_only=True,
+    )
+    monkeypatch.setattr(image_models, "_fetch_hf_image_collection_models", lambda: [mlx_model])
+    monkeypatch.setattr(image_models, "_discover_quant_repos", lambda *a, **k: {})
 
     metal = rank_image_models(
         {"has_gpu": True, "gpu_vram_gb": 64, "backend": "metal", "unified_memory": True},
-        search="",
+        search="example-image-model",
     )
     cuda = rank_image_models(
         {"has_gpu": True, "gpu_vram_gb": 64, "backend": "cuda"},
-        search="",
+        search="example-image-model",
     )
-    metal_ids = {m["id"] for m in metal}
-    cuda_ids = {m["id"] for m in cuda}
 
-    assert set(image_models.HF_MLX_IMAGE_REPO_SEEDS).issubset(metal_ids)
-    assert set(image_models.HF_MLX_IMAGE_REPO_SEEDS).isdisjoint(cuda_ids)
+    assert [m["id"] for m in metal] == ["mlx-community/example-image-model-4bit"]
+    assert cuda == []

@@ -248,8 +248,8 @@ def _package_status_note(name: str, probe: dict) -> str:
         return "Diffusers serving needs both diffusers and torch."
     if name == "krea_diffusers":
         if _package_installed_from_probe(name, probe):
-            return f"Krea runtime: diffusers {dists.get('diffusers', 'available')} with torch {dists.get('torch', 'available')}. Use Update/Reinstall to pull latest Diffusers from Git."
-        return "Krea image models need torch plus latest Diffusers from Git."
+            return f"Latest Diffusers runtime: diffusers {dists.get('diffusers', 'available')} with torch {dists.get('torch', 'available')}. Use Update/Reinstall to pull latest Diffusers from Git."
+        return "Some newer image models need torch plus latest Diffusers from Git."
     if name == "sam_mask":
         if _package_installed_from_probe(name, probe):
             return f"SAM object masks: transformers {dists.get('transformers', 'available')} with torch {dists.get('torch', 'available')}"
@@ -1320,14 +1320,14 @@ def setup_shell_routes() -> APIRouter:
             {
                 "name": "diffusers",
                 "pip": "diffusers[torch] torchvision accelerate scipy python-multipart",
-                "desc": "Image generation/editing pipelines (SD, Flux, Chroma) with PyTorch",
+                "desc": "Image generation/editing pipelines with PyTorch and Diffusers",
                 "category": "Image",
                 "target": "remote",
             },
             {
                 "name": "krea_diffusers",
                 "pip": "git+https://github.com/huggingface/diffusers.git torchvision accelerate scipy python-multipart",
-                "desc": "Latest Diffusers from Git for Krea image models",
+                "desc": "Latest Diffusers from Git for newly released image pipelines",
                 "category": "Image",
                 "target": "remote",
             },
