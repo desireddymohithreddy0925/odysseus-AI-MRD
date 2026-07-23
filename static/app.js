@@ -11,7 +11,7 @@ import ragModule from './js/rag.js';
 import presetsModule from './js/presets.js';
 import searchModule from './js/search.js';
 import chatModule from './js/chat.js?v=20260722ctxheader4';
-import compareModule from './js/compare/index.js';
+import compareModule from './js/compare/index.js?v=20260723compareicon2';
 import documentModule from './js/document.js?v=20260722emailfastindex1';
 import searchChatModule from './js/search-chat.js';
 import { makeWindowDraggable } from './js/windowDrag.js';
@@ -22,13 +22,13 @@ import memoryModule from './js/memory.js?v=20260722memoryloading1';
 import voiceRecorderModule from './js/voiceRecorder.js';
 import censorModule from './js/censor.js';
 import galleryModule from './js/gallery.js';
-import tasksModule from './js/tasks.js?v=20260720taskscompleted1';
+import tasksModule from './js/tasks.js?v=20260723tasksbulkfeedback1';
 import calendarModule from './js/calendar.js';
 import notesModule from './js/notes.js';
 import adminModule from './js/admin.js?v=20260716openrouter3';
 import settingsModule from './js/settings.js?v=20260722emailfastindex1';
 // Eagerly bind unified minimize/restore behavior across all tool modals.
-import './js/modalManager.js';
+import './js/modalManager.js?v=20260723compareicon2';
 // Desktop window tiling — drag a modal near an edge/corner to snap.
 import './js/tileManager.js';
 import themeModule from './js/theme.js';

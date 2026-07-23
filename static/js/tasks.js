@@ -21,6 +21,7 @@ let _viewingRuns = null; // task id when viewing run history
 let _clockInterval = null;
 let _taskFailurePending = false;
 let _taskCompletionPending = false;
+let _taskBulkDeleting = false;
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -110,6 +111,25 @@ function _animateTaskRemoval(ids) {
     card.classList.add('memory-tidy-removing');
   }
   return new Promise(resolve => setTimeout(resolve, 520));
+}
+
+function _setTaskCardsDeleting(ids, active) {
+  for (const id of ids) {
+    const card = _taskCardById(id);
+    if (!card) continue;
+    card.classList.toggle('task-card-deleting', !!active);
+    const existing = card.querySelector('.task-card-delete-busy');
+    if (!active) {
+      existing?.remove();
+      continue;
+    }
+    if (!existing) {
+      const badge = document.createElement('span');
+      badge.className = 'task-card-delete-busy';
+      badge.innerHTML = '<span class="task-card-delete-busy-label">Deleting</span><span class="task-card-delete-busy-spin" aria-hidden="true"></span>';
+      card.appendChild(badge);
+    }
+  }
 }
 
 async function _pauseTask(id) {
@@ -676,17 +696,65 @@ function _taskUpdateBulkCount() {
 }
 async function _taskBulkDelete() {
   const ids = [..._taskSelected];
-  if (!ids.length) return;
+  if (!ids.length || _taskBulkDeleting) return;
   const ok = uiModule?.styledConfirm
     ? await uiModule.styledConfirm(`Delete ${ids.length} task${ids.length > 1 ? 's' : ''}? This cannot be undone.`, { confirmText: 'Delete', danger: true })
     : confirm(`Delete ${ids.length} task(s)?`);
   if (!ok) return;
-  const results = await Promise.allSettled(ids.map(id => _deleteTask(id)));
-  const deletedIds = ids.filter((_, i) => results[i].status === 'fulfilled');
-  await _animateTaskRemoval(deletedIds);
-  if (uiModule) uiModule.showToast(`Deleted ${deletedIds.length} task${deletedIds.length > 1 ? 's' : ''}`);
-  await _fetchTasks();
-  _taskExitSelect();  // clears selection + re-renders the fresh list
+  _taskBulkDeleting = true;
+  const countEl = document.getElementById('tasks-selected-count');
+  const deleteBtn = document.getElementById('tasks-bulk-delete');
+  const cancelBtn = document.getElementById('tasks-bulk-cancel');
+  const selectAll = document.getElementById('tasks-select-all');
+  const originalDeleteHtml = deleteBtn?.innerHTML || '';
+  let busySpinner = null;
+  if (deleteBtn) {
+    deleteBtn.disabled = true;
+    deleteBtn.classList.add('tasks-bulk-loading');
+    deleteBtn.innerHTML = '<span class="tasks-bulk-loading-label">Deleting</span>';
+    busySpinner = spinnerModule.create('', 'clean', 'whirlpool');
+    const spEl = busySpinner.createElement();
+    spEl.classList.add('tasks-bulk-whirlpool');
+    deleteBtn.appendChild(spEl);
+    busySpinner.start();
+  }
+  if (cancelBtn) cancelBtn.disabled = true;
+  if (selectAll) selectAll.disabled = true;
+  if (countEl) countEl.textContent = `Deleting 0/${ids.length}…`;
+  _setTaskCardsDeleting(ids, true);
+  const deletedIds = [];
+  let finished = 0;
+  try {
+    const results = await Promise.allSettled(ids.map(async (id) => {
+      try {
+        await _deleteTask(id);
+        deletedIds.push(id);
+      } finally {
+        finished += 1;
+        if (countEl) countEl.textContent = `Deleting ${finished}/${ids.length}…`;
+      }
+    }));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    await _animateTaskRemoval(deletedIds);
+    if (uiModule) {
+      const msg = failed
+        ? `Deleted ${deletedIds.length}, failed ${failed}`
+        : `Deleted ${deletedIds.length} task${deletedIds.length > 1 ? 's' : ''}`;
+      uiModule.showToast(msg);
+    }
+    await _fetchTasks();
+  } finally {
+    _setTaskCardsDeleting(ids, false);
+    if (busySpinner) busySpinner.destroy();
+    if (deleteBtn) {
+      deleteBtn.classList.remove('tasks-bulk-loading');
+      deleteBtn.innerHTML = originalDeleteHtml || deleteBtn.innerHTML;
+    }
+    if (cancelBtn) cancelBtn.disabled = false;
+    if (selectAll) selectAll.disabled = false;
+    _taskBulkDeleting = false;
+    _taskExitSelect();  // clears selection + re-renders the fresh list
+  }
 }
 
 // Category filter chips (library-style tags) — solo-select: click one to

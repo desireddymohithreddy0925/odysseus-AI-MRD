@@ -11488,7 +11488,8 @@ textarea.memory-add-input {
   padding-right: 18px;
 }
 #email-lib-bulk-delete.email-bulk-loading,
-#email-lib-bulk-actions.email-bulk-loading {
+#email-lib-bulk-actions.email-bulk-loading,
+#tasks-bulk-delete.tasks-bulk-loading {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -11496,7 +11497,8 @@ textarea.memory-add-input {
   cursor: wait;
 }
 #email-lib-bulk-delete.email-bulk-loading .email-bulk-whirlpool,
-#email-lib-bulk-actions.email-bulk-loading .email-bulk-whirlpool {
+#email-lib-bulk-actions.email-bulk-loading .email-bulk-whirlpool,
+#tasks-bulk-delete.tasks-bulk-loading .tasks-bulk-whirlpool {
   width: 12px;
   height: 12px;
   margin: 0;
@@ -11504,7 +11506,8 @@ textarea.memory-add-input {
   top: -1px;
 }
 #email-lib-bulk-delete.email-bulk-loading .email-bulk-loading-label,
-#email-lib-bulk-actions.email-bulk-loading .email-bulk-loading-label {
+#email-lib-bulk-actions.email-bulk-loading .email-bulk-loading-label,
+#tasks-bulk-delete.tasks-bulk-loading .tasks-bulk-loading-label {
   position: relative;
   top: 0;
 }
@@ -24629,6 +24632,38 @@ a.chat-link[href^="#research-"] {
 /* Per-card select checkbox rides up to the title line. The "All" checkbox is
    #tasks-select-all (not .memory-select-cb), so it stays put. */
 .task-card .memory-select-cb { position: relative; top: -4px; }
+.task-card.task-card-deleting {
+  opacity: 0.68;
+  pointer-events: none;
+  position: relative;
+}
+.task-card-delete-busy {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, var(--panel, #111));
+  border: 1px solid color-mix(in srgb, var(--red) 24%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  z-index: 7;
+}
+.task-card-delete-busy-spin {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  animation: spin 0.8s linear infinite;
+}
 #tasks-pause-all-btn { position: relative; top: -2px; }
 /* Bigger ⋮ dropdown on mobile (its buttons carry inline styles → !important). */
 @media (max-width: 768px) {
