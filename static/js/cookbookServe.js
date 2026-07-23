@@ -1659,12 +1659,10 @@ function _rerenderCachedModels() {
 	      panelHtml += `<label class="hwfit-backend-diffusers" style="grid-column:1 / -1;">Negative${_h('Default negative prompt. Adds --negative-prompt for pipelines that support it. Edit or clear this per model.')} <input type="text" class="hwfit-sf" data-field="diff_negative_prompt" value="${esc(sv('diff_negative_prompt', diffDefaultNegative))}" placeholder="${esc(diffDefaultNegative)}" style="width:100%;" /></label>`;
 	      panelHtml += `<label class="hwfit-backend-diffusers" style="grid-column:1 / -1;">LoRA${_h('Diffusers LoRA file/path(s), comma or newline separated. Adds --lora.')} <input type="text" class="hwfit-sf" data-field="diff_lora" value="${esc(sv('diff_lora', ''))}" placeholder="/path/adapter.safetensors or org/repo" style="width:100%;" /></label>`;
 	      panelHtml += `<label class="hwfit-backend-diffusers">Scale${_h('Diffusers LoRA scale. Adds --lora-scale.')} <input type="text" class="hwfit-sf" data-field="diff_lora_scale" value="${esc(sv('diff_lora_scale', ''))}" placeholder="1.0" /></label>`;
-	      {
-	        const _mlxBase = sv('mlx_base_model', '');
-	        const _baseOpts = ['', 'schnell', 'dev', 'krea-dev', 'dev-krea', 'qwen', 'fibo', 'fibo-lite', 'fibo-edit', 'fibo-edit-rmbg', 'z-image', 'z-image-turbo', 'flux2-klein-4b', 'flux2-klein-9b', 'flux2-klein-9b-kv', 'flux2-klein-base-4b', 'flux2-klein-base-9b', 'ernie-image-turbo', 'ernie-image', 'ideogram4']
-	          .map(v => `<option value="${v}"${_mlxBase === v ? ' selected' : ''}>${v || 'auto'}</option>`).join('');
-	        panelHtml += `<label class="hwfit-backend-mlx_image">Base model${_h('For third-party/full Flux-family checkpoints when mflux cannot infer the family. Adds --base-model. This is not a LoRA/adaptor.')} <select class="hwfit-sf" data-field="mlx_base_model">${_baseOpts}</select></label>`;
-	      }
+		      {
+		        const _mlxBase = sv('mlx_base_model', '');
+		        panelHtml += `<label class="hwfit-backend-mlx_image">Base model${_h('Optional runtime base model/family override from the model card. Adds --base-model. This is not a LoRA/adaptor.')} <input type="text" class="hwfit-sf" data-field="mlx_base_model" value="${esc(_mlxBase)}" placeholder="auto" /></label>`;
+		      }
 	      {
 	        const _mlxStyle = sv('mlx_lora_style', '');
 	        const _styleOpts = ['', 'couple', 'font', 'home', 'identity', 'illustration', 'portrait', 'ppt', 'sandstorm', 'sparklers', 'storyboard']
@@ -4060,17 +4058,16 @@ function _renderCachedModelsData(list, data, host) {
   const _familyMap = {};
   const _families = [
     [/qwen/i, 'qwen'], [/llama/i, 'llama'], [/mistral|mixtral/i, 'mistral'],
-    [/deepseek/i, 'deepseek'], [/gemma/i, 'gemma'], [/phi/i, 'phi'],
-    [/minimax/i, 'minimax'], [/glm/i, 'glm'], [/flux/i, 'flux'],
-    [/stable.?diffusion|sdxl/i, 'sd'], [/z-image/i, 'z-image'],
-    [/whisper/i, 'whisper'], [/command|cohere/i, 'cohere'],
+	    [/deepseek/i, 'deepseek'], [/gemma/i, 'gemma'], [/phi/i, 'phi'],
+	    [/minimax/i, 'minimax'], [/glm/i, 'glm'],
+	    [/whisper/i, 'whisper'], [/command|cohere/i, 'cohere'],
     [/yi-/i, 'yi'], [/intern/i, 'intern'], [/falcon/i, 'falcon'],
   ];
   for (const m of allModels) {
     const n = (m.repo_id || '').toLowerCase();
     let tag = 'other';
     if (m.backend === 'ollama' || m.is_ollama) tag = 'llm';
-	    else if (m.is_diffusion || m.is_video || /flux|sdxl|stable-diffusion|z-image|qwen-image|diffusion|dreamshar|ltx(?:-|\/|$)|lightricks/i.test(n)) tag = 'image';
+		    else if (m.is_diffusion || m.is_video || m.is_image_gen || /(?:^|[-_/])(diffusion|image)(?:[-_/]|$)/i.test(n)) tag = 'image';
     else if (/whisper|stt|asr/i.test(n)) tag = 'stt';
     else if (/tts|cosyvoice|parler/i.test(n)) tag = 'tts';
     else if (/embed|bge|minilm|e5-/i.test(n)) tag = 'embedding';

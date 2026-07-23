@@ -5694,14 +5694,10 @@ body.bg-pattern-sparkles {
     .window-resizing {
       transition:none !important;
     }
-    /* Cookbook's modal-content is var(--bg) (inline) instead of the default
-       var(--panel), so its sticky header — which defaults to var(--panel) —
-       read as a different-coloured band. Match the header to the cookbook
-       body so the panel is one uniform colour. */
+    /* Cookbook opts out of the sticky header on mobile; the title bar scrolls
+       away with the content instead of following. Background is inherited from
+       the shared .modal-header rule so frosted/glass themes stay consistent. */
     #cookbook-modal .modal-header {
-      background: var(--bg);
-      /* Cookbook opts out of the sticky header on mobile; the
-         title bar scrolls away with the content instead of following. */
       position: static;
       top: auto;
     }

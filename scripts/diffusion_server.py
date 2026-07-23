@@ -551,36 +551,19 @@ def load_model():
 
         if single_file:
             logger.info(f"Trying from_single_file with: {single_file}")
-            # Detect model family from path/filename to prioritize the right pipeline + config
-            _path_lower = (model_path + "/" + (single_file or "")).lower()
-            _SD35_CONFIGS = ["stabilityai/stable-diffusion-3.5-large", "stabilityai/stable-diffusion-3.5-medium"]
-            _SD3_CONFIGS = ["stabilityai/stable-diffusion-3-medium-diffusers"]
-            _FLUX2_CONFIGS = ["black-forest-labs/FLUX.2-dev"]
-            _FLUX_CONFIGS = ["black-forest-labs/FLUX.1-schnell", "black-forest-labs/FLUX.1-dev"]
-            _SDXL_CONFIGS = ["stabilityai/stable-diffusion-xl-base-1.0"]
-
-            # Build ordered pipeline candidates based on model name hints
-            _pipeline_configs = []
-            if "sd3.5" in _path_lower or "stable-diffusion-3.5" in _path_lower:
-                _pipeline_configs.append(("StableDiffusion3Pipeline", _SD35_CONFIGS))
-            elif "sd3" in _path_lower or "stable-diffusion-3" in _path_lower:
-                _pipeline_configs.append(("StableDiffusion3Pipeline", _SD3_CONFIGS + _SD35_CONFIGS))
-            elif "flux.2" in _path_lower or "flux2" in _path_lower:
-                _pipeline_configs.append(("Flux2Pipeline", _FLUX2_CONFIGS))
-                _pipeline_configs.append(("FluxPipeline", _FLUX_CONFIGS))
-            elif "flux" in _path_lower:
-                _pipeline_configs.append(("FluxPipeline", _FLUX_CONFIGS))
-                _pipeline_configs.append(("Flux2Pipeline", _FLUX2_CONFIGS))
-            elif "sdxl" in _path_lower or "xl" in _path_lower:
-                _pipeline_configs.append(("StableDiffusionXLPipeline", _SDXL_CONFIGS))
-            # Always add all pipelines as fallbacks
-            _pipeline_configs.extend([
-                ("Flux2Pipeline", _FLUX2_CONFIGS),
-                ("StableDiffusion3Pipeline", _SD35_CONFIGS + _SD3_CONFIGS),
-                ("FluxPipeline", _FLUX_CONFIGS),
-                ("StableDiffusionXLPipeline", _SDXL_CONFIGS + [None]),
-                ("StableDiffusionPipeline", [None]),
-            ])
+            explicit_configs = [
+                c.strip()
+                for c in str(_args.single_file_config or "").replace("\n", ",").split(",")
+                if c.strip()
+            ]
+            config_candidates = explicit_configs or [None]
+            _pipeline_configs = [
+                ("Flux2Pipeline", config_candidates),
+                ("StableDiffusion3Pipeline", config_candidates),
+                ("FluxPipeline", config_candidates),
+                ("StableDiffusionXLPipeline", config_candidates),
+                ("StableDiffusionPipeline", config_candidates),
+            ]
             # Deduplicate while preserving order
             _seen = set()
             _deduped = []
@@ -1492,6 +1475,7 @@ if __name__ == "__main__":
     parser.add_argument("--steps", type=int, default=0, help="Default inference steps (0=auto)")
     parser.add_argument("--guidance-scale", type=float, default=3.5, help="Default classifier-free guidance scale")
     parser.add_argument("--negative-prompt", default="", help="Default negative prompt for pipelines that support it")
+    parser.add_argument("--single-file-config", default="", help="Base Diffusers repo/path for single-file checkpoints that need missing components. Comma-separated values are tried in order.")
     parser.add_argument("--width", type=int, default=1024, help="Default output width")
     parser.add_argument("--height", type=int, default=1024, help="Default output height")
     parser.add_argument("--cpu-offload", action="store_true", help="Enable model CPU offload")

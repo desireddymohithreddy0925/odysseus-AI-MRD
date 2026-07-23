@@ -261,17 +261,6 @@ async function _clearGpuProcesses(panel) {
   await _runQuickCmd(panel, _gpuCleanupCommand());
 }
 
-// Infer the gated base repo that single-file checkpoints need configs from
-function _inferBaseRepo(text) {
-  if (!text) return null;
-  const t = text.toLowerCase();
-  if (t.includes('sd3.5') || t.includes('stable-diffusion-3.5')) return 'stabilityai/stable-diffusion-3.5-large';
-  if (t.includes('sd3') || t.includes('stable-diffusion-3')) return 'stabilityai/stable-diffusion-3-medium-diffusers';
-  if (t.includes('flux')) return 'black-forest-labs/FLUX.1-schnell';
-  if (t.includes('sdxl') || t.includes('stable-diffusion-xl')) return 'stabilityai/stable-diffusion-xl-base-1.0';
-  return null;
-}
-
 export const ERROR_PATTERNS = [
   {
     pattern: /tmux is required|tmux.*not found|tmux:\s*command not found|command not found:\s*tmux|No such file or directory:\s*['"]?tmux/i,
@@ -450,11 +439,10 @@ export const ERROR_PATTERNS = [
     message: 'Single-file checkpoint needs a base model for missing components (text encoder, VAE). The base model may be gated — accept the license and set your HF token.',
     fixes: [
       { label: 'Request access to base model', action: (panel, _text) => {
-        // Extract gated repo from error, or infer from model name
         const gated = _text && _text.match(/Access to model\s+(\S+)\s+is restricted/i);
         const base = _text && _text.match(/config=([^\s,)]+)/i);
         const model = _text && _text.match(/load model from\s+(\S+)/i);
-        const repo = (gated && gated[1]) || (base && base[1]) || _inferBaseRepo(_text);
+        const repo = (gated && gated[1]) || (base && base[1]);
         if (repo) window.open('https://huggingface.co/' + repo, '_blank');
         else if (model && model[1]) window.open('https://huggingface.co/' + model[1].replace(/[.]$/, ''), '_blank');
       }},
@@ -474,11 +462,11 @@ export const ERROR_PATTERNS = [
   },
   {
     pattern: /Entry Not Found.*model_index\.json|Could not load model.*Check diffusers/i,
-    message: 'Single-file model — needs base config from a gated repo. Accept the license and set your HF token.',
+    message: 'Single-file model may need an explicit base config. Add --single-file-config <repo_or_path> if the checkpoint is missing components.',
     fixes: [
       { label: 'Request access to base model', action: (panel, _text) => {
         const gated = _text && _text.match(/Access to model\s+(\S+)\s+is restricted/i);
-        const repo = (gated && gated[1]) || _inferBaseRepo(_text);
+        const repo = gated && gated[1];
         if (repo) window.open('https://huggingface.co/' + repo, '_blank');
         else window.open('https://huggingface.co/settings/gated-repos', '_blank');
       }},

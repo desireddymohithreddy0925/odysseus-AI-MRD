@@ -504,8 +504,7 @@ export function _detectBackend(model) {
   const isRocm = sysBackend === 'rocm';
   const isAppleSilicon = ['metal', 'mps', 'apple'].includes(sysBackend);
   const _nm = `${model.repo_id || ''} ${model.path || ''} ${model.name || ''}`.toLowerCase();
-  const isImageModel = !!(model.is_image_gen || model.is_diffusion || model._tag === 'image'
-    || /\b(qwen[-_]?image|z[-_]?image|flux(?:\.|\b|-|_)|stable[-_]?diffusion|sdxl|hidream|boogu|krea[-_]?2)\b/i.test(_nm));
+  const isImageModel = !!(model.is_image_gen || model.is_diffusion || model._tag === 'image');
   // Image gen models → diffusers
   if (isImageModel) {
     if (/\bmlx\b|mlx-|_mlx|mlx-community\//i.test(_nm) || q.startsWith('MLX') || model.mlx_only) {

@@ -26,26 +26,42 @@ def test_rank_image_models_string_filter_still_applies(monkeypatch):
 
 
 def test_rank_image_models_uses_ram_budget_when_gpu_disabled(monkeypatch):
-    _disable_hf_discovery(monkeypatch)
+    model = {
+        "id": "example-org/example-image-model",
+        "name": "Example Image Model",
+        "provider": "example-org",
+        "params_b": 20.0,
+        "vram_bf16": 42.0,
+        "vram_fp8": 22.0,
+        "vram_q4": 14.0,
+        "default_quant": "FP8",
+        "quant_repos": {},
+        "capabilities": ["text-to-image"],
+        "description": "Imported from test fixture.",
+        "quality": 80,
+        "speed": 50,
+    }
+    monkeypatch.setattr(image_models, "_fetch_hf_image_collection_models", lambda: [model])
+    monkeypatch.setattr(image_models, "_discover_quant_repos", lambda *a, **k: {})
 
-    gpu_out = rank_image_models({"has_gpu": True, "gpu_vram_gb": 8, "available_ram_gb": 64}, search="Qwen Image")
-    ram_out = rank_image_models({"has_gpu": False, "gpu_vram_gb": 0, "available_ram_gb": 64}, search="Qwen Image")
+    gpu_out = rank_image_models({"has_gpu": True, "gpu_vram_gb": 8, "available_ram_gb": 64}, search="Example Image")
+    ram_out = rank_image_models({"has_gpu": False, "gpu_vram_gb": 0, "available_ram_gb": 64}, search="Example Image")
 
-    gpu_qwen = next(m for m in gpu_out if m["id"] == "Qwen/Qwen-Image")
-    ram_qwen = next(m for m in ram_out if m["id"] == "Qwen/Qwen-Image")
+    gpu_model = next(m for m in gpu_out if m["id"] == "example-org/example-image-model")
+    ram_model = next(m for m in ram_out if m["id"] == "example-org/example-image-model")
 
-    assert gpu_qwen["fit"] == "no_fit"
-    assert gpu_qwen["quant"] == "FP8"
-    assert gpu_qwen["fit_budget"] == "gpu"
-    assert ram_qwen["fit"] in {"good", "perfect"}
-    assert ram_qwen["quant"] == "BF16"
-    assert ram_qwen["fit_budget"] == "ram"
+    assert gpu_model["fit"] == "no_fit"
+    assert gpu_model["quant"] == "FP8"
+    assert gpu_model["fit_budget"] == "gpu"
+    assert ram_model["fit"] in {"good", "perfect"}
+    assert ram_model["quant"] == "BF16"
+    assert ram_model["fit_budget"] == "ram"
 
 
 def test_mlx_image_collection_models_only_show_on_apple(monkeypatch):
     mlx_model = {
-        "id": "mlx-community/FLUX.2-klein-4B-bf16",
-        "name": "FLUX.2 klein 4B bf16",
+        "id": "mlx-community/example-apple-image-model",
+        "name": "Example Apple Image Model",
         "provider": "mlx-community",
         "params_b": 4.0,
         "vram_bf16": 10.0,
@@ -62,30 +78,46 @@ def test_mlx_image_collection_models_only_show_on_apple(monkeypatch):
     monkeypatch.setattr(image_models, "_fetch_hf_image_collection_models", lambda: [mlx_model])
     monkeypatch.setattr(image_models, "_discover_quant_repos", lambda *a, **k: {})
 
-    cuda = rank_image_models({"has_gpu": True, "gpu_vram_gb": 48, "backend": "cuda"}, search="FLUX.2 klein")
+    cuda = rank_image_models({"has_gpu": True, "gpu_vram_gb": 48, "backend": "cuda"}, search="Example Apple")
     metal = rank_image_models(
         {"has_gpu": True, "gpu_vram_gb": 48, "backend": "metal", "unified_memory": True},
-        search="FLUX.2 klein",
+        search="Example Apple",
     )
 
     assert cuda == []
-    assert [m["id"] for m in metal] == ["mlx-community/FLUX.2-klein-4B-bf16"]
+    assert [m["id"] for m in metal] == ["mlx-community/example-apple-image-model"]
 
 
 def test_apple_image_mode_hides_non_mlx_models(monkeypatch):
-    _disable_hf_discovery(monkeypatch)
+    model = {
+        "id": "example-org/example-image-model",
+        "name": "Example Image Model",
+        "provider": "example-org",
+        "params_b": 4.0,
+        "vram_bf16": 8.0,
+        "vram_fp8": None,
+        "vram_q4": None,
+        "default_quant": "BF16",
+        "quant_repos": {},
+        "capabilities": ["text-to-image"],
+        "description": "Imported from test fixture.",
+        "quality": 80,
+        "speed": 80,
+    }
+    monkeypatch.setattr(image_models, "_fetch_hf_image_collection_models", lambda: [model])
+    monkeypatch.setattr(image_models, "_discover_quant_repos", lambda *a, **k: {})
 
     metal = rank_image_models(
         {"has_gpu": True, "gpu_vram_gb": 48, "backend": "metal", "unified_memory": True},
-        search="Qwen Image",
+        search="Example Image",
     )
     cuda = rank_image_models(
         {"has_gpu": True, "gpu_vram_gb": 48, "backend": "cuda"},
-        search="Qwen Image",
+        search="Example Image",
     )
 
     assert metal == []
-    assert any(m["id"] == "Qwen/Qwen-Image" for m in cuda)
+    assert [m["id"] for m in cuda] == ["example-org/example-image-model"]
 
 
 def test_mlx_collection_imports_show_on_metal_not_cuda(monkeypatch):
