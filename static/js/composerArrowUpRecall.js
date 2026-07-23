@@ -91,19 +91,24 @@ export function wireArrowUpRecall(composer, getUserMessages, options = {}) {
       return;
     }
 
-    const currentValue = norm(composer.value);
+    const rawCurrentValue = String(composer.value || '');
+    const currentValue = norm(rawCurrentValue);
     const recalledValue = norm(lastRecalledValue);
-    let currentIndex = composer.value === ''
+    let currentIndex = rawCurrentValue === ''
       ? -1
       : history.findIndex((item) => norm(item) === currentValue);
     if (currentIndex < 0 && currentValue && currentValue === recalledValue) {
       currentIndex = recallIndex;
     }
     if (currentIndex < 0 && currentValue) {
-      const markedIndex = Number(composer.dataset.odysseusRecallIndex);
+      const markedIndex = Number(composer.dataset?.odysseusRecallIndex);
       if (Number.isInteger(markedIndex) && markedIndex >= 0 && markedIndex < history.length) {
         currentIndex = markedIndex;
       }
+    }
+    if (rawCurrentValue !== '' && currentIndex < 0) {
+      debug('skip:draft-in-progress', { value: composer.value });
+      return;
     }
     e.preventDefault();
     e.stopPropagation?.();

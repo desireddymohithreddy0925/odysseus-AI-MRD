@@ -5359,6 +5359,8 @@ def setup_email_routes():
         owner: str = Depends(require_user),
     ):
         """Get email configuration (passwords masked)."""
+        if account_id is not None and not isinstance(account_id, str):
+            account_id = None
         if account_id:
             _assert_owns_account(account_id, owner)
         cfg = _get_email_config(account_id, owner=owner)

@@ -1351,7 +1351,7 @@ def _picker_models_for_endpoint(ep, base_url: str, kind: str):
     pinned = _normalize_model_ids(getattr(ep, "pinned_models", None))
     if _picker_requires_pinning(base_url, kind):
         if not _has_explicit_pinned_models(ep):
-            pinned = _legacy_visible_api_models(ep)
+            pinned = _legacy_visible_api_models(ep) if _hidden_model_ids(ep) else []
         return pinned, pinned
     return _visible_models(
         _cached_model_ids(ep),

@@ -8,10 +8,16 @@ import os
 import re
 from pathlib import Path
 
-from core.database import ChatMessage, GalleryImage, SessionLocal
 from src.constants import GENERATED_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
+
+
+def _database_models():
+    """Import DB models at call time so early import stubs cannot stick here."""
+    from core.database import ChatMessage, GalleryImage, SessionLocal
+
+    return ChatMessage, GalleryImage, SessionLocal
 
 
 def _generated_image_path_for_cleanup(filename: str) -> Path | None:
@@ -39,6 +45,7 @@ def _image_filename_from_url(url: str) -> str:
 
 def session_image_refs(db, session_id: str) -> tuple[set[str], set[str]]:
     """Return gallery image ids and generated-image filenames referenced by a chat."""
+    ChatMessage, GalleryImage, _ = _database_models()
     image_ids: set[str] = set()
     filenames: set[str] = set()
 
@@ -76,6 +83,7 @@ def session_image_refs(db, session_id: str) -> tuple[set[str], set[str]]:
 
 def cleanup_session_images(session_id: str, db=None) -> int:
     """Soft-delete Gallery rows and unlink generated files owned by a chat."""
+    _, GalleryImage, SessionLocal = _database_models()
     owns_db = db is None
     db = db or SessionLocal()
     try:

@@ -1008,10 +1008,20 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
         if not model_spec:
             return {"error": "No image model found. Configure one in Admin → Image Generation."}
 
+    async def _resolve_image_model(model_name: str):
+        def _call():
+            try:
+                return _resolve_model(model_name, owner=owner, model_type="image")
+            except TypeError as exc:
+                if "model_type" not in str(exc):
+                    raise
+                return _resolve_model(model_name, owner=owner)
+        return await asyncio.to_thread(_call)
+
     # Resolve the model to find the right endpoint
     try:
         try:
-            url, model_id, headers = await asyncio.to_thread(_resolve_model, model_spec, owner=owner, model_type="image")
+            url, model_id, headers = await _resolve_image_model(model_spec)
         except ValueError:
             _lower_model_spec = model_spec.lower()
             if not (
@@ -1197,9 +1207,14 @@ async def do_edit_image(
 
     try:
         try:
-            url, model_id, headers = await asyncio.to_thread(
-                _resolve_model, model_spec, owner=owner, model_type="image"
-            )
+            def _call():
+                try:
+                    return _resolve_model(model_spec, owner=owner, model_type="image")
+                except TypeError as exc:
+                    if "model_type" not in str(exc):
+                        raise
+                    return _resolve_model(model_spec, owner=owner)
+            url, model_id, headers = await asyncio.to_thread(_call)
         except ValueError:
             url, model_id, headers = await asyncio.to_thread(_resolve_model, model_spec, owner=owner)
     except ValueError:

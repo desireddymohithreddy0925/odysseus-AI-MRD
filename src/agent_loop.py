@@ -1120,7 +1120,7 @@ def _workspace_coding_rules(workspace: Optional[str]) -> str:
     if not workspace:
         return ""
     return (
-        "\n\n## Odysseus Terminus workspace mode\n"
+        "\n\n## Workspace coding mode\n"
         f"- Active workspace: `{workspace}`. Treat relative paths as relative to this folder.\n"
         "- This mode is for coding, debugging, shell, file, build, benchmark, and repo tasks. Do not use personal-assistant tools like email, calendar, notes, memory, documents, gallery, or UI panels for workspace work.\n"
         "- Work from the real filesystem and command output. Inspect before editing.\n"
@@ -2873,7 +2873,14 @@ def _compute_final_metrics(
     # billing/usage counters. Some providers report only the final agent round
     # or cache-adjusted input, which made the displayed context jump from e.g.
     # 44% to 5% even when the session history had not meaningfully changed.
-    ctx_tokens = request_context_tokens or estimate_tokens(messages)
+    if request_context_tokens:
+        ctx_tokens = request_context_tokens
+    elif last_round_input_tokens:
+        ctx_tokens = last_round_input_tokens
+    elif has_real_usage:
+        ctx_tokens = real_input_tokens
+    else:
+        ctx_tokens = estimate_tokens(messages)
     ctx_pct = min(round((ctx_tokens / context_length) * 100, 1), 100.0) if context_length else 0
 
     metrics = {

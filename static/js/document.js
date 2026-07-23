@@ -2490,7 +2490,15 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
   function _emailBodyToHtml(text) {
     const raw = String(text || '');
     const marker = _emailQuoteMarkerMatch(raw);
-    if (!marker) return _emailBodyFragmentToHtml(raw);
+    if (!marker) {
+      const t = raw.trim();
+      if (/<\/?(b|i|u|s|strong|em|del|strike|a|p|div|br|ul|ol|li|h[1-3]|blockquote|span|code|pre)\b[^>]*>/i.test(t)) {
+        return markdownModule.sanitizeAllowedHtml
+          ? markdownModule.sanitizeAllowedHtml(t)
+          : _emailPlainTextToHtml(t);
+      }
+      return _emailBodyFragmentToHtml(raw);
+    }
     const replyPart = raw.slice(0, marker.index);
     const quotedPart = raw.slice(marker.index);
     const quotedText = _emailHtmlToPlainText(quotedPart)

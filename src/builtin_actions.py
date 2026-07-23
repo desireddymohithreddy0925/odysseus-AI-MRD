@@ -124,7 +124,7 @@ async def action_consolidate_memory(owner: str, **kwargs) -> Tuple[str, bool]:
                 1 if mem.get("pinned") else 0,
                 1 if (mem.get("source") or "") == "user" else 0,
                 int(mem.get("uses") or 0),
-                len(text),
+                -len(text),
                 int(mem.get("timestamp") or 0),
             )
 
